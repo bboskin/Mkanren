@@ -1,0 +1,77 @@
+#lang racket
+
+
+(require "automata.rkt")
+;; implementing ways to convert grammars
+;; (interpreters) into automata
+
+#;(Automaton
+   start-state         
+   final-state         
+   all-states          
+   transition-function
+   alphabet            
+   stack-alphabets)
+
+;; Regular expressions
+(define (RE? e)
+  (match e
+    [(? symbol?) #t]
+    [`(,(? RE?) • ,(? RE?)) #t]
+    [`(,(? RE?) U ,(? RE?)) #t]
+    [`(,(? RE?) +) #t]
+    [`(,(? RE?) *) #t]
+    [else #f]))
+
+(define (RE->DFA e)
+  (match e
+    [(? symbol? x)
+     (let ((S (gensym 'S))
+           (F (gensym 'F)))
+       (Automaton S `(,F) `(,S ,F)
+                  `((,S ,(λ (i) (eqv? x i)) ,F))
+                  `(,x) '()))]
+    [`(,(? RE? e1) • ,(? RE? e2))
+     (let ((A1 (RE->DFA e1))
+           (A2 (RE->DFA e2)))
+       (match* (A1 A2)
+         [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
+           (Automaton S2 F2 A2 δ2 Σ2 Γ2))
+          (Automaton
+           S1 F2 (set-union A1 A2)
+           (append (map (λ (F) `(,F ε ,S2)) F1) δ1 δ2)
+           (set-union Σ1 Σ2)
+           '())]))]
+    [`(,(? RE? e1) U ,(? RE? e2))
+     (let ((A1 (RE->DFA e1))
+           (A2 (RE->DFA e2)))
+       (match* (A1 A2)
+         [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
+           (Automaton S2 F2 A2 δ2 Σ2 Γ2))
+          (let ((new-S (gensym 'S)))
+            (Automaton
+            new-S (set-union F1 F2) (set-union A1 A2)
+           (append `((,new-S ε ,S1) (,new-S ε ,S2)) δ1 δ2)
+           (set-union Σ1 Σ2)
+           '()))]))]
+    [`(,(? RE? e1) +)
+     (let ((A1 (RE->DFA e1)))
+       (match A1
+         [(Automaton S1 F1 A1 δ1 Σ1 Γ1)
+          (let ((new-S (gensym 'S)))
+            (Automaton
+             S1 (cons S1 F1) A1
+           (append (map (λ (x) `(,x ε ,S1)) F1) δ1)
+           Σ1
+           '()))]))]
+    [`(,(? RE? e1) *)
+     (let ((A1 (RE->DFA e1)))
+       (match A1
+         [(Automaton S1 F1 A1 δ1 Σ1 Γ1)
+          (let ((new-S (gensym 'S)))
+            (Automaton
+             S1 F1 A1
+             (append (map (λ (x) `(,x ε ,S1)) F1) δ1)
+             Σ1
+             '()))]))]
+    [else (error "Not a valid RE")]))
