@@ -27,8 +27,6 @@
     (S -> P)
     (P -> 'b)))
 
-;; find-words gets slow at around 25...
-
 (define AnBn
   '((S -> ε)
     (S -> 'a S 'b)))
@@ -79,11 +77,9 @@
                   (Σ '()))
          (match es
            ['()
-            (displayln "empty")
             (let ((δs `((,S ε ,F (pop on ,γ push ())) . ,δs)))
               (values Γ A δs Σ))]
            [`(ε . ,r)
-            (displayln "epsilon")
             (loop S2 r Γ A (ε-δs S S2 δs) Σ)]
            [`(',(? symbol? s) . ,r)
             (let* ((S2 (gensym S0))
@@ -97,8 +93,6 @@
                    (γ (gensym S0))
                    (Γ (cons γ Γ)))
               (loop S2 r Γ A (substate-δs γ S s s-F S2 δs) Σ))])))]))
-
-
 
 (define (get-states P)
   (foldr

@@ -69,10 +69,10 @@
 (define (F0 S Γ I) `((,S ,(build-list (length Γ) (λ (_) '(#f))) ,I)))
 
 (define (Fk A δ U search)
-  (λ (old L δ)
+  (λ (old L δ ε)
     (match search
-      ['dfs (append (foldr set-union '() (map δ L)) old)]
-      ['bfs (append old (foldr set-union '() (map δ L)))])))
+      ['dfs (append (foldr set-union '() (map δ L)) ε old)]
+      ['bfs (append old ε (foldr set-union '() (map δ L)))])))
 
 
 
@@ -123,17 +123,18 @@
         (let ((T (F0 S Γ I))
               (update-T (Fk A δ U Π))
               (F? (final-state? F)))
-          (let loop ((T T)
-                     (ε '()))
+          (let loop ((T T))
             (match T
-              ['() (if (null? ε) b (loop ε '()))]
-              [`((,s ,ks ,(? stop?)) . ,rest) (loop '() '())]
+              ['() b]
+              [`((,s ,ks ,(? stop?)) . ,rest) (loop rest #;'())]
               [`((,s ,ks ,a) . ,rest)
-               (let ((ε (set-union ε (update-epsilons s δ ks a))))
-                 (let ((rec (λ () (loop (update-T rest (א Σ a) (apply-transitions U δ s ks a)) ε))))
-                   (if (and (F? s) (all-empty? ks) (go? a))
-                       (f a rec)
-                       (rec))))])))]))
+               (let ((rec (λ () (loop (update-T rest
+                                                (א Σ a)
+                                                (apply-transitions U δ s ks a)
+                                                (update-epsilons s δ ks a))))))
+                 (if (and (F? s) (all-empty? ks) (go? a))
+                     (f a rec)
+                     (rec)))])))]))
     ((_ M I stop? go? U b f א)
      (run M I stop? go? U b f א 'bfs))))
 
