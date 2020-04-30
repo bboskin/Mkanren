@@ -2,47 +2,87 @@
 
 (require "automata.rkt")
 
+(provide RE? CFG?
+         RE->DFA
+         CFG->PDA
+         RE->CFG)
+
 (define (set-cons x s) (if (member x s) s (cons x s)))
 
-;;;;;;;;;;;;;;;;;
-;; Definition of a production rule.
-;; points from a symbol to either an atom, ε,
-;; or a series (concatenation) of symbols and atoms.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Grammars: REs and CFGs, and how to convert an RE into a CFG
 
-(define (production-rule? x)
-  (match x
-    [`(,(? symbol?) -> ε) #t]
-    [`(,(? symbol?) -> (quote ,(? symbol?))) #t]
-    [`(,(? symbol?) -> ,(? symbol?)) #t]
-    [`(,(? symbol?) -> ,(? symbol? s) s2...) #t]
+(define (RE? e)
+  (match e
+    [(? symbol?) #t]
+    [`(,(? RE?) • ,(? RE?)) #t]
+    [`(,(? RE?) U ,(? RE?)) #t]
+    [`(,(? RE?) +) #t]
+    [`(,(? RE?) *) #t]
     [else #f]))
 
-(define (CFG? G) (andmap production-rule? G))
+
+(define (CFG? G)
+  (define (production-rule? x)
+    (match x
+      [`(,(? symbol?) -> ε) #t]
+      [`(,(? symbol?) -> (quote ,(? symbol?))) #t]
+      [`(,(? symbol?) -> ,(? symbol?)) #t]
+      [`(,(? symbol?) -> ,(? symbol? s) s2...) #t]
+      [else #f]))
+  (andmap production-rule? G))
+
+(define (RE->CFG e)
+  'TODO)
+
+(define (RE->DFA e)
+  (match e
+    [(? symbol? x)
+     (let ((S (gensym 'S))
+           (F (gensym 'F)))
+       (Automaton S `(,F) `(,S ,F) `((,S ,(λ (i) (eqv? x i)) ,F)) `(,x) '()))]
+    [`(,(? RE? e1) • ,(? RE? e2))
+     (match* ((RE->DFA e1) (RE->DFA e2))
+       [((Automaton S1 F1 A1 δ1 Σ1 Γ1) (Automaton S2 F2 A2 δ2 Σ2 Γ2))
+        (Automaton
+         S1 F2 (set-union A1 A2)
+         (append (map (λ (F) `(,F ε ,S2)) F1) δ1 δ2)
+         (set-union Σ1 Σ2)
+         '())])]
+    [`(,(? RE? e1) U ,(? RE? e2))
+     (match* ((RE->DFA e1) (RE->DFA e2))
+       [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
+         (Automaton S2 F2 A2 δ2 Σ2 Γ2))
+        (let ((new-S (gensym 'S)))
+          (Automaton
+           new-S (set-union F1 F2) (set-union A1 A2)
+           (append `((,new-S ε ,S1) (,new-S ε ,S2)) δ1 δ2)
+           (set-union Σ1 Σ2)
+           '()))])]
+    [`(,(? RE? e1) +)
+     (match (RE->DFA e1)
+       [(Automaton S1 F1 A1 δ1 Σ1 Γ1)
+        (let ((new-S (gensym 'S)))
+          (Automaton
+           S1 (cons S1 F1) A1
+           (append (map (λ (x) `(,x ε ,S1)) F1) δ1)
+           Σ1
+           '()))])]
+    [`(,(? RE? e1) *)
+     (match (RE->DFA e1)
+       [(Automaton S1 F1 A1 δ1 Σ1 Γ1)
+        (let ((new-S (gensym 'S)))
+          (Automaton
+           S1 F1 A1
+           (append (map (λ (x) `(,x ε ,S1)) F1) δ1)
+           Σ1
+           '()))])]
+    [else (error "Not a valid RE")]))
 
 
 
-;; This works!
-(define A
-  '((S -> 'a)
-    (S -> P)
-    (P -> 'b)))
-
-(define AnBn
-  '((S -> ε)
-    (S -> 'a S 'b)))
-
-(define Bool
-  '((S -> 'T)
-    (S -> 'F)
-    (S -> 'p)
-    (S -> 'q)
-    (S -> 'not S)
-    (S -> 'andbegin S* 'andend)
-    (S -> 'orbegin S* 'orend)
-    (S* -> ε)
-    (S* -> S S*)))
-
-;; each DFA has only one final state
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CFGs and PDAs
 
 
 (define (ε-δs S S2 δs)
@@ -132,7 +172,3 @@
                 extra-δs))
             (Γ (list Γ)))
         (Automaton S F A δ Σ Γ)))))
-
-
-
-

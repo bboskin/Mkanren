@@ -126,12 +126,14 @@
           (let loop ((T T))
             (match T
               ['() b]
-              [`((,s ,ks ,(? stop?)) . ,rest) (loop rest #;'())]
+              [`((,s ,ks ,(? stop?)) . ,rest) (loop rest)]
               [`((,s ,ks ,a) . ,rest)
-               (let ((rec (λ () (loop (update-T rest
-                                                (א Σ a)
-                                                (apply-transitions U δ s ks a)
-                                                (update-epsilons s δ ks a))))))
+               (let ((rec (λ ()
+                            (loop (update-T
+                                   rest
+                                   (א Σ a)
+                                   (apply-transitions U δ s ks a)
+                                   (update-epsilons s δ ks a))))))
                  (if (and (F? s) (all-empty? ks) (go? a))
                      (f a rec)
                      (rec)))])))]))
@@ -150,13 +152,17 @@
             (displayln T)
             (match T
               ['() b]
-              [`((,s ,ks ,(? stop?)) . ,rest) (loop '())]
+              [`((,s ,ks ,(? stop?)) . ,rest) (loop rest)]
               [`((,s ,ks ,a) . ,rest)
-               (let ((new-states/ε (update-epsilons s δ ks a)))
-                 (let ((rec (λ () (loop (update-T rest (א Σ a) (apply-transitions U δ s ks a) new-states/ε)))))
-                   (if (and (F? s) (all-empty? ks) (go? a))
-                       (f a rec)
-                       (rec))))])))]))
+               (let ((rec (λ ()
+                            (loop (update-T
+                                   rest
+                                   (א Σ a)
+                                   (apply-transitions U δ s ks a)
+                                   (update-epsilons s δ ks a))))))
+                 (if (and (F? s) (all-empty? ks) (go? a))
+                     (f a rec)
+                     (rec)))])))]))
     ((_ M I stop? go? U b f א)
      (run/display M I stop? go? U b f א 'bfs))))
 

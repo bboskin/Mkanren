@@ -1,19 +1,12 @@
 #lang racket
 
-
 (require "automata.rkt")
-;; implementing ways to convert grammars
-;; (interpreters) into automata
 
-#;(Automaton
-   start-state         
-   final-state         
-   all-states          
-   transition-function
-   alphabet            
-   stack-alphabets)
 
-;; Regular expressions
+(define (set-cons x s) (if (member x s) s (cons x s)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Regular expressions and DFAs
 (define (RE? e)
   (match e
     [(? symbol?) #t]
@@ -75,3 +68,20 @@
              Σ1
              '()))]))]
     [else (error "Not a valid RE")]))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CFGs and PDAs 
+;; 
+
+(define (production-rule? x)
+  (match x
+    [`(,(? symbol?) -> ε) #t]
+    [`(,(? symbol?) -> (quote ,(? symbol?))) #t]
+    [`(,(? symbol?) -> ,(? symbol?)) #t]
+    [`(,(? symbol?) -> ,(? symbol? s) s2...) #t]
+    [else #f]))
+
+;; definition of a CFG
+(define (CFG? G) (andmap production-rule? G))
