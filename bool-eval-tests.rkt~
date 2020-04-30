@@ -1,6 +1,6 @@
 #lang racket
 
-(require "bool-eval.rkt"
+(require "sat.rkt"
          "automata.rkt")
 
 

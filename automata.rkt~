@@ -96,15 +96,7 @@
    (λ (t a)
      (match t
        [`(,s1 ε ,s2 . ,stack-conds) a]
-       [`(,s1 ,(? symbol? v) ,s2 . ,stack-conds)
-        (if (and (eqv? s s1) (eqv? i v))
-            (let ((new-stacks (map check-stacks ks stack-conds))
-                  (new-accs (map (λ (u a) (u s i a)) U acc)))
-              (if (andmap id new-stacks)
-                  `((,s2 ,new-stacks ,new-accs) . ,a)
-                  a))
-            a)]
-       [`(,s1 ,(? procedure? cond) ,s2 . ,stack-conds)
+       [`(,s1 ,cond ,s2 . ,stack-conds)
         (if (and (eqv? s s1) (cond i))
             (let ((new-stacks (map check-stacks ks stack-conds))
                   (new-accs (map (λ (u a) (u s i a)) U acc)))

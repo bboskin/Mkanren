@@ -1,7 +1,7 @@
 #lang racket
 
 (require "automata.rkt")
-(require "easy-examples.rkt")
+(require "automata-examples.rkt")
 ;;; tests
 (define run-tests? #t)
 
