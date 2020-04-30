@@ -3,7 +3,7 @@
 (provide Automaton
 
          Automaton-start-state
-         Automaton-final-state
+         Automaton-final-states
          Automaton-all-states
          Automaton-transition-function
          Automaton-alphabet
@@ -15,13 +15,16 @@
 
          find-words/display
          accept?/display
-         find-words-only/display)
+         find-words-only/display
+
+
+         terminal?)
 
 ;; Here's a structure definition. We can use it to define finite-state automata.
 
 (struct Automaton
   [start-state         ;; S
-   final-state         ;; F
+   final-states         ;; F
    all-states          ;; Q
    transition-function ;; δ
    alphabet            ;; Σ
@@ -53,6 +56,13 @@
      (and (eqv? s γ) (append vs ks))]
     [(`(,s . ,ks) 'preserve-stack)
      (cons s ks)]))
+
+
+;; symbols allowed to part of Σ
+(define (terminal? x)
+  (and (not (eqv? x 'ε))
+       (or (symbol? x)
+           (member x '(0 1 2 3 4 5 6 7 8 9)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; frontier-based breadth-first search
@@ -96,7 +106,7 @@
    (λ (t a)
      (match t
        [`(,s1 ε ,s2 . ,stack-conds) a]
-       [`(,s1 ,(? symbol? v) ,s2 . ,stack-conds)
+       [`(,s1 ,(? terminal? v) ,s2 . ,stack-conds)
         (if (and (eqv? s s1) (eqv? i v))
             (let ((new-stacks (map check-stacks ks stack-conds))
                   (new-accs (map (λ (u a) (u s i a)) U acc)))
@@ -104,6 +114,8 @@
                   `((,s2 ,new-stacks ,new-accs) . ,a)
                   a))
             a)]
+       ;; users can define transitions using more general conditions
+       ;; if they so desire. Automatically generated machines don't use this.
        [`(,s1 ,(? procedure? cond) ,s2 . ,stack-conds)
         (if (and (eqv? s s1) (cond i))
             (let ((new-stacks (map check-stacks ks stack-conds))

@@ -32,8 +32,32 @@
       [else #f]))
   (andmap production-rule? G))
 
-(define (RE->CFG e)
-  'TODO)
+(define (RE->CFG S e)
+  (match e
+    [(? symbol? s) `((,S -> ',s))]
+    [`(,(? RE? e1) *)
+     (let ((G (RE->CFG S e1)))
+       `((,S -> ε) ,@G (,S -> ,S ,S)))]
+    [`(,(? RE? e1) +)
+     (let ((G (RE->CFG S e1)))
+       `(,@G (,S -> ,S ,S)))]
+    [`(,(? RE? e1) U ,(? RE? e2))
+     (let ((S1 (gensym 'S))
+           (S2 (gensym 'S)))
+       (let ((G1 (RE->CFG S1 e1))
+             (G2 (RE->CFG S2 e2)))
+         `((,S -> ,S1) ,@G1 (,S -> ,S2) ,@G2)))]
+    [`(,(? RE? e1) • ,(? RE? e2))
+     (let ((S1 (gensym 'S)))
+       (let ((G1 (RE->CFG S e1))
+             (G2 (RE->CFG S1 e2)))
+         `(,@(map (λ (x) `(,@x ,S1)) G1)
+           ,@G2)))]
+    [else (error  "Invalid RE!")]))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; Automated generation of abstract machines from grammars
 
 (define (RE->DFA e)
   (match e
@@ -99,13 +123,13 @@
 (define (rule->δ PDAs x r)
   (match x
     [`(,S0 -> ε)
-     (let ((F (car (Automaton-final-state (cdr (assv S0 PDAs))))))
+     (let ((F (car (Automaton-final-states (cdr (assv S0 PDAs))))))
        (values '() '() `((,S0 ε ,F preserve-stack)) '()))]
     [`(,S0 -> ',(? symbol? s))
-     (let ((F (car (Automaton-final-state (cdr (assv S0 PDAs))))))
+     (let ((F (car (Automaton-final-states (cdr (assv S0 PDAs))))))
        (values '() '() `((,S0 ,s ,F preserve-stack)) `(,s)))]
     [`(,S0 -> ,e ,es ...)
-     (let* ((F (car (Automaton-final-state (cdr (assv S0 PDAs)))))
+     (let* ((F (car (Automaton-final-states (cdr (assv S0 PDAs)))))
             (γ (gensym S0))
             (S2 (gensym S0))
             (init-δs `((,S0 ε ,S2 (pop on #t push (,γ))))))
@@ -129,7 +153,7 @@
            [`(,(? symbol? s) . ,r)
             (let* ((S2 (gensym S0))
                    (A (cons S2 A))
-                   (s-F (car (Automaton-final-state (cdr (assv s PDAs)))))
+                   (s-F (car (Automaton-final-states (cdr (assv s PDAs)))))
                    (γ (gensym S0))
                    (Γ (cons γ Γ)))
               (loop S2 r Γ A (substate-δs γ S s s-F S2 δs) Σ))])))]))
@@ -163,7 +187,7 @@
                                (append γ Γ)
                                (set-union A All)
                                (append Σ Σ1)))]))))
-      (let ((F (Automaton-final-state (cdr (assv S PDAs))))
+      (let ((F (Automaton-final-states (cdr (assv S PDAs))))
             (A (set-union
                 (foldr set-union '() (map Automaton-all-states (map cdr PDAs)))
                 A))

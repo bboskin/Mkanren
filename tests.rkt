@@ -47,15 +47,18 @@
      (not (member '(orend not p orend) v))
      (not (member '(andbegin p p p andend) v)))))
 
-(if run-tests?
-    (let ((b (tests))
-          (bool-passes (bool-tests)))
-      (begin
-        (if b
-            (displayln "Tests Pass")
-            (error "Tests Fail!!!"))
-        (if bool-passes
-            (displayln "Bool tests pass")
-            (error "Bool tests fail!!"))))
-    (displayln "Tests skipped."))
+;; cpu time: 12928 real time: 12107 gc time: 249
+
+(time
+ (if run-tests?
+     (let ((b (tests))
+           (bool-passes (bool-tests)))
+       (begin
+         (if b
+             (displayln "Tests Pass")
+             (error "Tests Fail!!!"))
+         (if bool-passes
+             (displayln "Bool tests pass")
+             (error "Bool tests fail!!"))))
+     (displayln "Tests skipped.")))
 
