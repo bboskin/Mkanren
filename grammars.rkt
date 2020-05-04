@@ -5,7 +5,7 @@
 (provide RE? CFG? CNF?
          RE->CFG CFG->CNF
 
-         RE->DFA CFG->PDA)
+         RE->DFA CNF->PDA)
 
 (define (set-cons x s) (if (member x s) s (cons x s)))
 
@@ -43,7 +43,7 @@
 
 (define (terminal? x)
   (match x
-    [''(,(symbol? x)) #t]
+    [`',(? symbol? x) #t]
     [(? symbol?) #t]
     [else #f]))
 
@@ -57,14 +57,15 @@
     [`',(? symbol? s) #t]
     ['ε ε-ok?]
     [`(,(? symbol? P) ,(? symbol? Q)) #t]
-    [else (displayln x) #f]))
+    [else #f]))
 
 
 (define (CFG? G)
   (match G
     ['() #t]
     [`((,S -> ,es ...) . ,r)
-     (and (andmap production-rule? es)
+     (and (not (null? es))
+          (andmap production-rule? es)
           (CFG? r))]))
 
 (define (CNF? G)
@@ -74,59 +75,61 @@
         ['() #t]
         [`((,S -> ,es ...) . ,r)
          (and (andmap (CNF-production-rule? (eqv? S S0)) es)
+              (not (null? es))
               (loop r))]))))
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; conversion between grammars.
-;; We can convert RE's to CFGs, and we can convert CFGs to RE's
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; RE -> CFG
 
 (define (RE->CFG-fn S e)
   (match e
     [(? symbol? s) `((,S -> ',s))]
-    [`(,(? RE? e1) *)
-     (let ((G (RE->CFG-fn S e1)))
-       (set-cons
-        `(,S -> ε)
-        (foldr
-         (λ (x a)
-           (match x
-             [`(,P -> ε) a]
-             [`(,P -> ',s) (set-cons `(,S -> ',s ,S) a)]
-             [`(,P -> ,L) (if (eqv? L S) a (set-cons `(,S -> ,L) a))]
-             [`(,P -> ,es ... ,L) (set-cons `(,S -> ,@es ,S) a)]
-             [else (set-cons `(,S -> ,@(cddr x) ,S) a)]))
-         '()
-         G)))]
     [`(,(? RE? e1) U ,(? RE? e2))
      (let ((S1 (gensym 'S))
            (S2 (gensym 'S)))
        (let ((G1 (RE->CFG-fn S1 e1))
              (G2 (RE->CFG-fn S2 e2)))
-         `((,S -> ,S1) (,S -> ,S2) ,@G1 ,@G2)))]
+         `((,S -> ,S1 ,S2) ,@G1 ,@G2)))]
     [`(,(? RE? e1) • ,(? RE? e2))
-     (let ((S1 (gensym 'S)))
-       (let ((G1 (RE->CFG-fn S e1))
-             (G2 (RE->CFG-fn S1 e2)))
-         (set-union
-          (map (λ (x)
-                 (match x
-                   [`(,P -> ε) `(,P -> ,S1)]
-                   [`(,P -> ,xs ...) `(,P -> ,@xs ,S1)]))
-               G1)
-          G2)))]
+     (let ((S1 (gensym 'S))
+           (S2 (gensym 'S)))
+       (let ((G1 (RE->CFG-fn S1 e1))
+             (G2 (RE->CFG-fn S2 e2)))
+         `((,S -> (,S1 ,S2)) ,@G1 ,@G2)))]
     [`(,(? RE? e1) +) (RE->CFG-fn S `(,e1 • (,e1 *)))]
+    [`(,(? RE? e1) *)
+     (let ((G (RE->CFG-fn S e1)))
+       (match G
+         [`((,S -> ,es ...) . ,rs)
+          `((,S -> ,@(set-cons
+                   'ε
+                   (foldr
+                    (λ (x a)
+                      (match x
+                        ['ε a]
+                        [`',s (set-cons `(',s ,S) a)]
+                        [(? symbol? P) (set-cons `(,P ,S) a)]
+                        [`(,es ... ,L)
+                         (if (eqv? L S)
+                             (set-cons x a)
+                             (set-cons `(,@es ,L ,S) a))]))
+                    '()
+                    es)))
+            . ,rs)]))]
     [else (error  "Invalid RE!")]))
 
+;; users can declare a start symbol if they want
 (define-syntax RE->CFG
   (syntax-rules ()
     ((_ e) (RE->CFG-fn 'S e))
     ((_ S e) (RE->CFG-fn S e))))
 
 
-;; new start variable
-;; eliminate epsilons
-;; shorten rules (introduce symbols)
-;; expand rules
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CFG -> CNF
 
 (define (add-epsilon-subs-helper S ln)
   (cond
@@ -163,7 +166,9 @@
          (let* ((es (remove 'ε es))
                 (G (map
                     (add-epsilon-subs S)
-                    `(,@(reverse acc) (,S -> . ,es) ,@r))))
+                    `(,@(reverse acc)
+                      ,@(if (null? es) '() `((,S -> . ,es)))
+                      ,@r))))
            (remove-epsilons S0 G '()))
          (remove-epsilons S0 (cdr G) (cons (car G) acc)))]))
 
@@ -260,11 +265,7 @@
              (let ((G (reverse acc)))
                (if (CNF? G)
                    G
-                   (begin (displayln "result is:")
-                          (displayln G)
-                          (displayln "start state is")
-                          (displayln new-S0)
-                          (error "not a CNF, but nothing to fix"))))]
+                   (error "not a CNF, but nothing to fix")))]
             [else
              (let ((G2 (find-and-fix-line (car G) (cdr G) acc '() #f)))
                  (if G2
@@ -320,236 +321,83 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; CFGs and PDAs
+;; generating PDAs from CNFs
 
-(define (terminal-δs/push S2 S s δs γ new-γ)
-  (if (eqv? #t γ)
-      `((,S ,s ,S2 (pop on #t push (,new-γ))) . ,δs)
-      `((,S ,s ,S2 (pop on ,γ push (,new-γ))) . ,δs)))
+;; we maintain a list of many PDAs, each representing
+;; a production rule state. They are then merged after all rules have
+;; been processed
+(define (init-PDAs G)
+  (map
+   (λ (x)
+     (match x
+       [`(,S -> ,es ...)
+        (let ((F (gensym 'F)))
+          (Automaton S `(,F) `(,S ,F) '() '() '(())))]))
+   G))
 
-(define (terminal-δs/pop S2 S s δs γ)
-  (if (eqv? #t γ)
-      `((,S ,s ,S2 preserve-stack) . ,δs)
-      `((,S ,s ,S2 (pop on ,γ push ())) . ,δs)))
+(define (get-PDA S Ms)
+  (let ((vs (filter (λ (x) (eqv? (Automaton-start-state x) S)) Ms)))
+    (if vs (if (not (= 1 (length vs)))
+               (error (format "~s automata associated to the ~s" (length vs) S))
+               (car vs))
+        (error 'get-PDA (format "No automaton with this start state ~s" S)))))
 
-(define (substate-δs S s s-F S2 δs γ)
-  (if (eqv? #t γ)
-      `((,S ε ,s preserve-stack)
-        (,s-F ε ,S2 preserve-stack)
-        ,@δs)
-      `((,S ε ,s (pop on ,γ push (,γ)))
-        (,s-F ε ,S2 (pop on ,γ push (,γ)))
-        ,@δs)))
+(define (set-PDA M Ms)
+  (let ((S (Automaton-start-state M)))
+    (foldr
+     (λ (x a)
+       (if (eqv? S (Automaton-start-state x))
+           (cons M a)
+           (cons x a)))
+     '()
+     Ms)))
 
-(define (rule->M F r A)
-  'TODO
-  #;(match r
-    [`(,S0 -> ,e ,es ...)
-     (let ((init-δs `()))
-       (let loop ((S S0)
-                  (es (cons e es))
-                  (A '())
-                  (δs init-δs)
-                  (Σ '())
-                  (γs `(,(gensym S0))))
-         (match es
-           ['() (Automaton S `(,S . ,F) `(,S . ,A) δs Σ `(,γs))]
-           ['(ε) (Automaton S `(,S . ,F) `(,S . ,A) δs Σ `(,γs))]
-           [`(',(? symbol? s))
-            (let ((δs `((,S ,s ,S2 (pop on ,(car γs) push (,(car γs)))) . ,δs)))
-                    (Automaton S `(,S2 . ,F) `(,S2 .  ,A) δs Σ `(,γs)))]
-           [`(,(? symbol? S2))
-            (let ((δs `((,S ,s ,S2 (pop on ,(car γs) push (,s))) . ,δs)))
-                  (Automaton S `(,S2 . ,F) `(,S2 .  ,A) δs Σ `(,γs)))])
-         (match (car es)
-           ['ε
-            (if (null? γs)
-                (Automaton S0 `(,S . ,F) A δs Σ `(,γs))
-                (error 'rule-m (format "Invalid production rule ~s" r)))]
-           [',(? symbol? s)
-            (let ((S2 (gensym S0)))
-              (if (eqv? curr #t)
-                  (let ((δs `((,S ,s ,S2 preserve-stack) . ,δs)))
-                    (values Γ A δs Σ))
-                  (let ((δs `((,S ,s ,S2 (pop on ,curr push (,s))) . ,δs)))
-                    (values Γ A δs Σ))))]
-           [(? symbol? s)
-            (if (eqv? s S)
-                (if (null? γs)
-                    (values Γ A δs Σ)
-                    (values Γ A δs Σ))
-              (let ((s-f (begin (displayln s)
-                                (car F))))
-                (if (eqv? curr #t)
-                    (values Γ A (set-cons `(,S ε ,s preserve-stack) δs) Σ)
-                    (values Γ A (set cons `(,S ε ,s (pop on ,curr push (,curr))) δs) Σ))))]
-           
-           [else (error 'rule->M (format "invalid production rule tag ~s" e))])))]))
-(define (rule->δ PDAs x)
-  (let ((F (Automaton-final-states (cdr (assv (car x) PDAs)))))
-    (match x
-    [`(,S0 -> ε) (values '() '() `((,S0 ε ,F preserve-stack)) '())]
-    [`(,S0 -> ',(? symbol? s)) (values '() '() `((,S0 ,s ,F preserve-stack)) `(,s))]
-    [`(,S0 -> ,(? symbol? S)) (values '() '() `((,S0 ε ,S preserve-stack)) `())]
-    [else
-     (match (rule->M F x)
-       [(Automaton S F A Δ Σ Γs) 'TODO]
-       #;
-     (let ((init-δs `()))
-       (let loop ((S S0)
-                  (es (cons e es))
-                  (Γ '())
-                  (A '())
-                  (δs init-δs)
-                  (Σ '())
-                  (curr #t))
-         (match es
-           ['() (if (eqv? curr #t)
-                    (let ((δs `((,S ε ,F preserve-stack) . ,δs)))
-                      (values Γ A δs Σ))
-                    (let ((δs `((,S ε ,F (pop on ,curr push ())) . ,δs)))
-                      (values (set-cons curr Γ) A δs Σ)))]
-           [`(ε)
-            (if (eqv? curr #t)
-                (let ((δs `((,S ε ,F preserve-stack) . ,δs)))
-                  (values Γ A δs Σ))
-                (let ((δs `((,S ε ,F (pop on ,curr push ())) . ,δs)))
-                  (values (set-cons curr Γ) A δs Σ)))]
-           [`(',(? symbol? s))
-            (if (eqv? curr #t)
-                (let ((δs `((,S ,s ,F preserve-stack) . ,δs)))
-                  (values Γ A δs Σ))
-                (let ((δs `((,S ,s ,F (pop on ,curr push ())) . ,δs)))
-                  (values Γ A δs Σ)))]
-           [`(,(? symbol? s))
-            (if (eqv? s S)
-                (if (eqv? curr #t)
-                    (values Γ A δs #;(set-cons `(,S ε ,s preserve-stack) δs) Σ)
-                    (values Γ A δs #;(set cons `(,S ε ,s (pop on ,curr push (,curr))) δs) Σ))
-              (let ((s-f (begin (displayln s)
-                                (car (Automaton-final-states (cdr (assv s PDAs)))))))
-                (if (eqv? curr #t)
-                    (values Γ A (set-cons `(,S ε ,s preserve-stack) δs) Σ)
-                    (values Γ A (set cons `(,S ε ,s (pop on ,curr push (,curr))) δs) Σ))))]
-           [`(',(? symbol? s) . ,r)
-            (let* ((S2 (gensym S0))
-                   (A (cons S2 A))
-                   (Σ (set-cons s Σ)))
-              (if (more-terminals? r)
-                  (let* ((γ (gensym 'γ))
-                         (Γ (set-cons γ Γ)))
-                    (loop S2 r Γ A (terminal-δs/push S2 S s δs curr γ) Σ γ))
-                  (loop S2 r Γ A (terminal-δs/pop S2 S s δs curr) Σ curr)))]
-           [`(,(? symbol? s) . ,r)
-            (let* ((S2 (gensym S0))
-                   (A (cons S2 A))
-                   (s-F (begin (displayln s)
-                               (car (Automaton-final-states (cdr (assv s PDAs)))))))
-              (loop S2 r Γ A (substate-δs S s s-F S2 δs curr) Σ curr))]))))])))
+(define (grow M r Ms)
+  (match M
+    [(Automaton S0 F A δ Σ `(,Γ))
+     (match r
+       ['ε (set-PDA (Automaton S0 F A `((,S0 ε ,(car F) preserve-stack) . ,δ) Σ `(,Γ)) Ms)]
+       [`',a
+        (let* ((δ (cons `(,S0 ,a ,(car F) preserve-stack) δ))
+               (Σ (set-cons a Σ)))
+          (set-PDA (Automaton S0 F A δ Σ  `(,Γ)) Ms))]
+       [`(,(? symbol? P) ,(? symbol? Q))
+        (match* ((get-PDA P Ms) (get-PDA Q Ms))
+          [((Automaton Sp Fp Ap δp Σp Γp)
+            (Automaton Sq Fq Aq δq Σq Γq))
+           (let ((γ (gensym 'γ)))
+             (let ((transition-S->P `(,S0 ε ,Sp (pop on #t push (,γ))))
+                   (transition-P->Q `(,(car Fp) ε ,Sq (pop on ,γ push (,γ))))
+                   (transition-Q->F `(,(car Fq) ε ,(car F) (pop on ,γ push ()))))
 
-#;
-(define (rule->δ PDAs x)
-  (match x
-    [`(,S0 -> ε)
-     (let ((F (car (Automaton-final-states (cdr (assv S0 PDAs))))))
-       (values '() '() `((,S0 ε ,F preserve-stack)) '()))]
-    [`(,S0 -> ',(? symbol? s))
-     (let ((F (car (Automaton-final-states (cdr (assv S0 PDAs))))))
-       (values '() '() `((,S0 ,s ,F preserve-stack)) `(,s)))]
-    [`(,S0 -> ,(? symbol? S))
-     (let ((F (car (Automaton-final-states (cdr (assv S0 PDAs))))))
-       (values '() '() `((,S0 ε ,S preserve-stack)) `()))]
-    [`(,S0 -> ,e ,es ...)
-     (let* ((F (car (Automaton-final-states (cdr (assv S0 PDAs)))))
-            (init-δs `()))
-       (let loop ((S S0)
-                  (es (cons e es))
-                  (Γ '())
-                  (A '())
-                  (δs init-δs)
-                  (Σ '())
-                  (curr #t))
-         (match es
-           ['() (if (eqv? curr #t)
-                    (let ((δs `((,S ε ,F preserve-stack) . ,δs)))
-                      (values Γ A δs Σ))
-                    (let ((δs `((,S ε ,F (pop on ,curr push ())) . ,δs)))
-                      (values (set-cons curr Γ) A δs Σ)))]
-           [`(ε)
-            (if (eqv? curr #t)
-                (let ((δs `((,S ε ,F preserve-stack) . ,δs)))
-                  (values Γ A δs Σ))
-                (let ((δs `((,S ε ,F (pop on ,curr push ())) . ,δs)))
-                  (values (set-cons curr Γ) A δs Σ)))]
-           [`(',(? symbol? s))
-            (if (eqv? curr #t)
-                (let ((δs `((,S ,s ,F preserve-stack) . ,δs)))
-                  (values Γ A δs Σ))
-                (let ((δs `((,S ,s ,F (pop on ,curr push ())) . ,δs)))
-                  (values Γ A δs Σ)))]
-           [`(,(? symbol? s))
-            (if (eqv? s S)
-                (if (eqv? curr #t)
-                    (values Γ A δs #;(set-cons `(,S ε ,s preserve-stack) δs) Σ)
-                    (values Γ A δs #;(set cons `(,S ε ,s (pop on ,curr push (,curr))) δs) Σ))
-              (let ((s-f (begin (displayln s)
-                                (car (Automaton-final-states (cdr (assv s PDAs)))))))
-                (if (eqv? curr #t)
-                    (values Γ A (set-cons `(,S ε ,s preserve-stack) δs) Σ)
-                    (values Γ A (set cons `(,S ε ,s (pop on ,curr push (,curr))) δs) Σ))))]
-           [`(',(? symbol? s) . ,r)
-            (let* ((S2 (gensym S0))
-                   (A (cons S2 A))
-                   (Σ (set-cons s Σ)))
-              (if (more-terminals? r)
-                  (let* ((γ (gensym 'γ))
-                         (Γ (set-cons γ Γ)))
-                    (loop S2 r Γ A (terminal-δs/push S2 S s δs curr γ) Σ γ))
-                  (loop S2 r Γ A (terminal-δs/pop S2 S s δs curr) Σ curr)))]
-           [`(,(? symbol? s) . ,r)
-            (let* ((S2 (gensym S0))
-                   (A (cons S2 A))
-                   (s-F (begin (displayln s)
-                               (car (Automaton-final-states (cdr (assv s PDAs)))))))
-              (loop S2 r Γ A (substate-δs S s s-F S2 δs curr) Σ curr))])))]))
+               (let ((new-δs (set-cons transition-S->P
+                                       (set-cons transition-P->Q
+                                                 (set-cons transition-Q->F δ)))))
+               (let ((M (Automaton S0 F A new-δs Σ `(,(cons γ Γ)))))
+                 (set-PDA M Ms)))))])]
+       [else (error "unknown rule format")])]))
 
-(define (get-states P)
+(define (line->PDAs ln Ms)
+  (match ln
+    [`(,S -> ,es ...)
+     (foldr (λ (e a) (grow (get-PDA S a) e a)) Ms es)]))
+
+(define (merge-PDAs M Ms)
   (foldr
-   (λ (x a)
-     (if (memv (car x) a)
-         a
-         (cons (car x) a)))
-   '()
-   P))
+   (λ (M1 Ma)
+     (match* (M1 Ma)
+       [((Automaton S1 F1 A1 δ1 Σ1 `(,Γ1))
+         (Automaton Sa Fa Aa δa Σa `(,Γa)))
+        (Automaton Sa Fa
+                   (set-union A1 Aa)
+                   (set-union δ1 δa)
+                   (set-union Σ1 Σa)
+                   `(,(set-union Γ1 Γa)))]))
+   M
+   Ms))
 
-(define (init-group S)
-  (let ((F (gensym 'F)))
-    (cons S (Automaton S `(,F) `(,S ,F) '() '() '(())))))
+(define (CNF->PDA G)
+  (let* ((Ms (foldr line->PDAs (init-PDAs G) G)))
+    (merge-PDAs (get-PDA (caar G) Ms) Ms)))
 
 
-(define (CFG->PDA S G)
-  (let ((PDAs (map init-group (get-states G))))
-    (let-values (((Γ A extra-δs Σ)
-                  (let loop ((ls G)
-                             (δs '())
-                             (Γ '())
-                             (All '())
-                             (Σ '()))
-                    (match ls
-                      ['() (values Γ All δs Σ)]
-                      [`(,x . ,r)
-                       (let-values (((γ A a Σ1) (rule->δ PDAs x)))
-                         (loop r
-                               (append a δs)
-                               (append γ Γ)
-                               (set-union A All)
-                               (set-union Σ Σ1)))]))))
-      (let ((F (Automaton-final-states (cdr (assv S PDAs))))
-            (A (set-union
-                (foldr set-union '() (map Automaton-all-states (map cdr PDAs)))
-                A))
-            (δ (append
-                (foldr append '() (map Automaton-transition-function (map cdr PDAs)))
-                extra-δs))
-            (Γ (list Γ)))
-        (Automaton S F A δ Σ Γ)))))
