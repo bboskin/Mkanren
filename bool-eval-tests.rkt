@@ -150,11 +150,13 @@
 ;; Uncomment this, and it will run hundreds of large, random tests. will print some numbers
 
 
-(begin
+;; cpu time: 14097 real time: 13096 gc time: 240
+(time (begin
   #;#;#;(probe-val-of 100)
   (probe-val-of 100)
   (probe-val-of 100)
-  (probe-val-of 100))
+  (probe-val-of 100)
+  (displayln "probe test passed")))
 
 (define (run-thorough k ρ)
   (let ((M (Val-of ρ)))
@@ -172,5 +174,6 @@
 
 ;; a more thorough search through all short words
 
-(begin
-  (run-thorough 4 none-true))
+(time (begin
+  (run-thorough 4 none-true)
+  (displayln "thorough tests passed")))

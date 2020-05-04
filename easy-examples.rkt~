@@ -1,7 +1,6 @@
 #lang racket
 
-(require "automata.rkt"
-         "grammars.rkt")
+(require "automata.rkt")
 (provide (all-defined-out))
 
 
@@ -181,7 +180,22 @@ b [a U b]* d* = "b", "baaaa", "bad", "babababababaabababbabaababbadddddddd", ...
 ;; now, we have a simple language.
 ;; This automaton recognizes and accepts strings of 0 or more a's,
 ;; and rejects all other strings using alphabet letters.
-(define A* (RE->DFA '(a *)))
+(define A*
+  (Automaton
+   'S
+   '(S)
+   '(S)
+   `((S ,(λ (x) (eqv? x 'a)) S))
+   Alphabet
+   '()))
+
+#|              
+               ___
+              |   |a
+              v   |
+            ->[S]-
+
+|#
 
 ;; this automaton also recognizes strings of 0 or more a's
 ;; the definition is silly because it describes the same language
