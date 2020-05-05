@@ -155,7 +155,7 @@
                        (if (and (F? s) (all-empty? ks) (go? a))
                            (f a rec)
                            (rec))))]))))]))
-((_ M I stop? go? U b f א)
+    ((_ M I stop? go? U b f א)
      (run M I stop? go? U b f א 'bfs #f))
     ((_ M I stop? go? U b f א display)
      (run M I stop? go? U b f א 'bfs #t))))
