@@ -198,17 +198,17 @@
           (match G
             ['() (if (CNF? acc) acc (error "not a CNF, but nothing to fix"))]
             [`((,S ->) . ,G)
-             (let ((G (if Δ? `(,@acc (,S -> ,@(reverse prevs)) ,@G) G))
-                   (acc (if Δ? '() (snoc `(,S -> ,@(reverse prevs)) acc))))
+             (let ((G (if Δ? `(,@acc (,S -> . ,(reverse prevs)) . ,G) G))
+                   (acc (if Δ? '() (snoc `(,S -> . ,(reverse prevs)) acc))))
                (loop G acc '() #f))]
             [`((,S -> (,s1) . ,es) . ,G)
              (loop `((,S -> ,s1 . ,es) . ,G) acc prevs Δ?)]
             [`((,S -> ε . ,es) . ,G)
-             (loop `((,S -> ,@es) . ,G) acc `(ε . ,prevs) Δ?)]
+             (loop `((,S -> . ,es) . ,G) acc `(ε . ,prevs) Δ?)]
             [`((,S -> ',a . ,es) . ,G)
-             (loop `((,S -> ,@es) . ,G) acc `(',a . ,prevs) Δ?)]
+             (loop `((,S -> . ,es) . ,G) acc `(',a . ,prevs) Δ?)]
             [`((,S -> (,(? symbol? P) ,(? symbol? Q)) . ,es) . ,G)
-             (loop `((,S -> ,@es) . ,G) acc (set-cons `(,P ,Q) prevs) Δ?)]
+             (loop `((,S -> . ,es) . ,G) acc (set-cons `(,P ,Q) prevs) Δ?)]
             [`((,S -> ,(? symbol? P) . ,es) . ,G)
              (cond
                [(eqv? S P) (loop `((,S -> . ,es) . ,G) acc prevs #t)]
