@@ -128,55 +128,39 @@
    δ))
 
 (define-syntax run
-  (syntax-rules ()
-    ((_ M I stop? go? U b f א Π)
+  (syntax-rules (display)
+    ((_ M I stop? go? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
         (let ((T (F0 S Γ I))
               (update-T (Fk A δ U Π))
               (F? (final-state? F)))
-          (let loop ((T T))
-            (match T
-              ['() b]
-              [`((,s ,ks ,(? stop?)) . ,rest) (loop rest)]
-              [`((,s ,ks ,a) . ,rest)
-               (let ((rec (λ ()
-                            (loop (update-T
-                                   rest
-                                   (א Σ a)
-                                   (apply-transitions U δ s ks a)
-                                   (update-epsilons s δ ks a))))))
-                 (if (and (F? s) (all-empty? ks) (go? a))
-                     (f a rec)
-                     (rec)))])))]))
-    ((_ M I stop? go? U b f א)
-     (run M I stop? go? U b f א 'bfs))))
+          (let loop ((T T)
+                     (V '()))
+            (begin
+              (if disp? (displayln T) void)
+              (match T
+                ['() b]
+                [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V)]
+                [`((,s ,ks ,a) . ,rest)
+                 (if (member `(,s ,ks ,a) V)
+                     (loop rest V)
+                     (let ((rec (λ ()
+                                  (loop (update-T
+                                         rest
+                                         (א Σ a)
+                                         (apply-transitions U δ s ks a)
+                                         (update-epsilons s δ ks a))
+                                        (cons `(,s ,ks ,a) V)))))
+                       (if (and (F? s) (all-empty? ks) (go? a))
+                           (f a rec)
+                           (rec))))]))))]))
+((_ M I stop? go? U b f א)
+     (run M I stop? go? U b f א 'bfs #f))
+    ((_ M I stop? go? U b f א display)
+     (run M I stop? go? U b f א 'bfs #t))))
 
-(define-syntax run/display
-  (syntax-rules ()
-    ((_ M I stop? go? U b f א Π)
-     (match M
-       [(Automaton S F A δ Σ Γ)
-        (let ((T (F0 S Γ I))
-              (update-T (Fk A δ U Π))
-              (F? (final-state? F)))
-          (let loop ((T T))
-            (displayln T)
-            (match T
-              ['() b]
-              [`((,s ,ks ,(? stop?)) . ,rest) (loop rest)]
-              [`((,s ,ks ,a) . ,rest)
-               (let ((rec (λ ()
-                            (loop (update-T
-                                   rest
-                                   (א Σ a)
-                                   (apply-transitions U δ s ks a)
-                                   (update-epsilons s δ ks a))))))
-                 (if (and (F? s) (all-empty? ks) (go? a))
-                     (f a rec)
-                     (rec)))])))]))
-    ((_ M I stop? go? U b f א)
-     (run/display M I stop? go? U b f א 'bfs))))
+
 
 
 
@@ -195,7 +179,7 @@
    (λ (_ a) (if (null? (car a)) '() (list (caar a))))))
 
 (define (accept?/display M w)
-  (run/display
+  (run
    M
    `(,w)
    (λ (_) #f)
@@ -204,7 +188,8 @@
     (λ (_1 _2 acc) (cdr acc)))
    #f
    (λ (_1 _2) #t)
-   (λ (_ a) (if (null? (car a)) '() (list (caar a))))))
+   (λ (_ a) (if (null? (car a)) '() (list (caar a))))
+   display))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; a query to get all members of a machine M's language with length up to (or equal to) k
@@ -224,7 +209,7 @@
    (λ (Σ _) Σ)))
 
 (define (find-words/display M k)
-  (run/display
+  (run
    M
    '(())
    (λ (a) (> (length (car a)) k))
@@ -236,12 +221,15 @@
                 (if (member w ans)
                     ans
                     (cons w ans))))
-   (λ (Σ _) Σ)))
+   (λ (Σ _) Σ)
+   display))
 
 (define (find-words-only M k)
-  (filter (λ (x) (= (length x) k)) (find-words M k)))
+  (filter (λ (x) (= (length x) k))
+          (find-words M k)))
 
 (define (find-words-only/display M k)
-  (filter (λ (x) (= (length x) k)) (find-words/display M k)))
+  (filter (λ (x) (= (length x) k))
+          (find-words/display M k)))
 
 
