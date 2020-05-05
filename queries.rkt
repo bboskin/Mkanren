@@ -5,6 +5,16 @@
 (provide  find-words
           accept?)
 
+
+;; Sets
+(define (set-cons x s)
+  (if (member x s) s (cons x s)))
+(define (set-union s1 s2) (foldr set-cons s2 s1))
+(define (set-equal? s1 s2)
+  (and (= (length s1) (length s2))
+       (andmap (λ (x) (member x s2)) s1)
+       (andmap (λ (x) (member x s1)) s2)))
+
 (define-syntax accept?
   (syntax-rules ()
     [(_ M w) (accept? M w #f)]

@@ -2,25 +2,11 @@
 
 (require "automata.rkt")
 
-(provide
- RE? CFG? CNF?
- RE->CFG CFG->CNF
- RE->DFA CNF->PDA
+(provide RE? CFG? CNF?
+         RE->CFG CFG->CNF
+         RE->DFA CNF->PDA
  
  set-equal?)
-
-
-(define (snoc x s) (foldr cons `(,x) s))
-
-(define (set-cons x s)
-  (if (member x s) s (cons x s)))
-(define (set-union s1 s2)
-  (foldr set-cons s2 s1))
-
-(define (set-equal? s1 s2)
-  (and (= (length s1) (length s2))
-       (andmap (λ (x) (member x s2)) s1)
-       (andmap (λ (x) (member x s1)) s2)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammars: REs and CFGs, and how to convert an RE into a CFG

@@ -10,7 +10,16 @@
          Automaton-stack-alphabets
         
          terminal?
-         run)
+         run
+
+         ;; basics
+         set-union
+         set-equal?
+         set-cons
+
+         snoc)
+
+
 
 ;; Here's a structure definition. We can use it to define finite-state automata.
 
@@ -31,10 +40,19 @@
 
 
 
+;; Lists
+
+(define (snoc x s) (foldr cons `(,x) s))
+
+
 ;; Sets
 (define (set-cons x s)
   (if (member x s) s (cons x s)))
 (define (set-union s1 s2) (foldr set-cons s2 s1))
+(define (set-equal? s1 s2)
+  (and (= (length s1) (length s2))
+       (andmap (λ (x) (member x s2)) s1)
+       (andmap (λ (x) (member x s1)) s2)))
 
 ;; Stacks 
 (define (stack-empty? k) (equal? k '(#f)))
@@ -135,6 +153,7 @@
                 ['() b]
                 [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V)]
                 [`((,s ,ks ,a) . ,rest)
+                 
                  (if (member `(,s ,ks ,a) V)
                      (loop rest V)
                      (let ((rec (λ ()
