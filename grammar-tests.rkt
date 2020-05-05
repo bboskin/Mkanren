@@ -57,8 +57,7 @@
 (define AnBn2 '((S -> ε ('a S 'b))))
 
 (define DumbBool '((S -> ('orbegin S* 'orend))
-                   (S* -> ε (S S*))
-                   ))
+                   (S* -> ε (S S*))))
 
 (define Bool/SuperSimp
   '((S -> 'p ('orbegin S* 'orend))
@@ -133,10 +132,11 @@
        (not (accept? AUB+/PDA '()))
        (accept? AUB+/PDA '(a b a b b a a a a a))
        (equal? (find-words AUB•c+*/PDA 0) '(()))
-       (equal? (find-words AUB•c+*/PDA 2) '(() (a) (a a) (b c)))
        (accept? AUB•c+*/PDA '(a b c a b c b c b c))
        (not (accept? AUB•c+*/PDA '(a b c a b b c b c)))
        (equal? (find-words AnBn/PDA 10) (find-words AnBn2/PDA 10))
+       
+       (set-equal? (find-words AUB•c+*/PDA 2) '(() (a) (a a) (b c)))
        (set-equal? (find-words AUB•c+*/PDA 4) (find-words AUB•c+*/DFA 4))
        (set-equal? (find-words A*/PDA 4) (find-words A*/DFA 4))
        (set-equal? (find-words A+/PDA 4) (find-words A+/DFA 4))

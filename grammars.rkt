@@ -2,14 +2,21 @@
 
 (require "automata.rkt")
 
-(provide RE? CFG? CNF?
-         RE->CFG CFG->CNF
+(provide
+ RE? CFG? CNF?
+ RE->CFG CFG->CNF
+ RE->DFA CNF->PDA
+ 
+ set-equal?)
 
-         RE->DFA CNF->PDA
 
-         set-equal?)
+(define (snoc x s) (foldr cons `(,x) s))
 
-(define (set-cons x s) (if (member x s) s (cons x s)))
+(define (set-cons x s)
+  (if (member x s) s (cons x s)))
+(define (set-union s1 s2)
+  (foldr set-cons s2 s1))
+
 (define (set-equal? s1 s2)
   (and (= (length s1) (length s2))
        (andmap (λ (x) (member x s2)) s1)
@@ -21,7 +28,6 @@
     [(not (cons? ls)) #f]
     [else (or (member* s (car ls))
               (member* s (cdr ls)))]))
-
 
 (define (more-terminals? es)
   (ormap
@@ -182,6 +188,71 @@
   (and (member* 'ε G)
        (reverse (remove-epsilons S0 (reverse G) '()))))
 
+(define (CFG->CNF G)
+  (if (null? G)
+      (error "No null grammars")
+      (let* ((S0 (caar G))
+             (new-S0 (gensym S0))
+             (G  `((,new-S0 -> ,S0) . ,G))
+             (G (let ((v (fix-epsilons? new-S0 G)))
+                  (if v v G))))
+        (let loop ((G G)
+                   (acc '())
+                   (prevs '())
+                   (Δ? #f))
+          (match G
+            ['() (if (CNF? acc) acc (error "not a CNF, but nothing to fix"))]
+            [`((,S ->) . ,G)
+             (let ((G (if Δ? `(,@acc (,S -> ,@(reverse prevs)) ,@G) G))
+                   (acc (if Δ? '() (snoc `(,S -> ,@(reverse prevs)) acc))))
+               (loop G acc '() #f))]
+            [`((,S -> (,s1) . ,es) . ,G)
+             (loop `((,S -> ,s1 . ,es) . ,G) acc prevs Δ?)]
+            [`((,S -> ε . ,es) . ,G)
+             (loop `((,S -> ,@es) . ,G) acc `(ε . ,prevs) Δ?)]
+            [`((,S -> ',a . ,es) . ,G)
+             (loop `((,S -> ,@es) . ,G) acc `(',a . ,prevs) Δ?)]
+            [`((,S -> (,(? symbol? P) ,(? symbol? Q)) . ,es) . ,G)
+             (loop `((,S -> ,@es) . ,G) acc (set-cons `(,P ,Q) prevs) Δ?)]
+            [`((,S -> ,(? symbol? P) . ,es) . ,G)
+             (if (eqv? S P)
+                 (loop `((,S -> . ,es) . ,G) acc prevs #t)
+                 (let ((ln (assv P (append acc G))))
+                   (if ln
+                       (loop `((,S -> ,@(reverse (cddr ln)) . ,es) . ,G) acc prevs #t)
+                       (loop `((,S -> . ,es) . ,G) acc prevs #t))))]
+            [`((,S -> ,(? symbol? P) . ,es) . ,G)
+             (if (eqv? S P)
+                       (loop `((,S -> . ,es) . ,G) acc prevs #t)
+                       (let ((ln (assv P (append acc G))))
+                         (if ln
+                             (loop `((,S -> ,@(reverse (cddr ln)) . ,es) . ,G) acc prevs #t)
+                             (loop `((,S -> . ,es) . ,G) acc prevs #t))))]
+            [`((,S -> (',a . ,ss) . ,es) . ,G)
+             (let ((A (gensym S)))
+                     (loop
+                      `((,S -> (,A . ,ss) . ,es) . ,(set-cons `(,A -> ',a) G))
+                      acc
+                      prevs #t))]
+            [`((,S -> (,(? symbol? P) ,(? symbol? Q) . ,ss) . ,es) . ,G)
+             (let ((R (gensym S)))
+                     (loop
+                      `((,S -> (,R . ,ss) . ,es) . ,(cons `(,R -> (,P ,Q)) G))
+                      acc
+                      prevs
+                      #t))]
+            [`((,S -> (,(? symbol? P) ',a . ,ss) . ,es) . ,G)
+             (let ((Q (gensym S))
+                   (R (gensym S)))
+                     (loop
+                      `((,S -> (,R . ,ss) . ,es) . ,(append `((,R -> (,P ,Q)) (,Q -> ',a)) G))
+                      acc
+                      prevs
+                      #t))]
+            [else (error 'CFG->CNF (format "invalid rule: ~s" (car G)))])))))
+
+
+#|
 (define (find-and-fix-line ln G seen prevs Δ?)
   (match ln
     [`(,S -> ,es ...)
@@ -246,16 +317,15 @@
              (G  `((,new-S0 -> ,S0) . ,G))
              (G (let ((v (fix-epsilons? new-S0 G)))
                   (if v v G))))
-        
         (let loop ((G G)
                    (acc '()))
           (cond
             [(null? G)
              (let ((G (reverse acc)))
                (if (CNF? G) G (error "not a CNF, but nothing to fix")))]
-            [(find-and-fix-line (car G) (cdr G) acc '() #f)
-             => (λ (G) (loop G '()))]
+            [(find-and-fix-line (car G) (cdr G) acc '() #f) => (λ (G) (loop G '()))]
             [else (loop (cdr G) (cons (car G) acc))])))))
+|#
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
@@ -274,7 +344,7 @@
        [((Automaton S1 F1 A1 δ1 Σ1 _) (Automaton S2 F2 A2 δ2 Σ2 _))
         (Automaton
          S1 F2 (set-union A1 A2)
-         (set-union (map (λ (F) `(,F ε ,S2)) F1) δ1 δ2)
+         (set-union (map (λ (F) `(,F ε ,S2)) F1) (set-union δ1 δ2))
          (set-union Σ1 Σ2)
          '())])]
     [`(,(? RE? e1) U ,(? RE? e2))
@@ -310,32 +380,24 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; generating PDAs from CNFs
 
-
-
-;; we maintain a list of many PDAs, each representing
-;; a production rule state. They are then merged after all rules have
-;; been processed
-
-
-(define (start-state S ρ)
-  (let ((pr? (assv S ρ)))
-    (if pr? (car pr?) (error (format "No values for ~s" S)))))
-
-(define (final-state S ρ)
-  (let ((pr? (assv S ρ)))
-    (if pr? (cadr pr?) (error (format "No values for ~s" S)))))
-
+;; environment 
 (define (env A)
   (let ((F (λ (x) (string->symbol (string-append (symbol->string x) "F")))))
     (foldr (λ (x a) `((,x ,(F x)) . ,a)) '() A)))
 
-(define (init-M ρ)
-  (let* ((S0 (caar ρ))
-         (F `(,(final-state S0 ρ)))
-         (A (foldr append '() ρ)))
-    (Automaton S0 F A '() '() '(()))))
+(define (start-state S ρ)
+  (let ((pr? (assv S ρ)))
+    (if pr?
+        (car pr?)
+        (error (format "No values for ~s" S)))))
 
-(define ((grow S ρ) r M)
+(define (final-state S ρ)
+  (let ((pr? (assv S ρ)))
+    (if pr?
+        (cadr pr?)
+        (error (format "No values for ~s" S)))))
+
+(define (grow S ρ r M)
   (let ((Sf (final-state S ρ)))
     (match M
       [(Automaton S0 F A δ Σ Γ)
@@ -357,12 +419,19 @@
                 (Automaton S0 F A δ Σ Γ))))]
          [else (error "unknown rule format")])])))
 
-
-(define ((line->PDA ρ) ln M)
-  (match ln
-    [`(,S -> ,es ...)
-     (foldr (grow S ρ) M es)]))
+(define (init-M ρ)
+  (let* ((S0 (caar ρ))
+         (F `(,(final-state S0 ρ)))
+         (A (foldr append '() ρ)))
+    (Automaton S0 F A '() '() '(()))))
 
 (define (CNF->PDA G)
   (let ((ρ (env (map car G))))
-    (foldr (line->PDA ρ) (init-M ρ) G)))
+    (let go ((G G) (M (init-M ρ)))
+      (match G
+        ['() M]
+        [`((,S ->) . ,G)
+         (go G M)]
+        [`((,S -> ,e ,es ...) . ,G)
+         (go `((,S -> . ,es) . ,G)
+             (grow S ρ e M))]))))
