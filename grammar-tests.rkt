@@ -125,7 +125,7 @@
                (find-words A*/PDA 3))
        (equal? (cdr (find-words A*/PDA 10))
                (find-words A+/PDA 10))
-       (equal? (find-words AUB/PDA 100) '((a) (b)))
+       (set-equal? (find-words AUB/PDA 100) '((a) (b)))
        (accept? AUB*/PDA '())
        (accept? AUB*/PDA '(a b a b b a a a a a))
        (not (accept? AUB*/PDA '(a b a b b c a a a a a)))

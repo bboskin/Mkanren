@@ -172,7 +172,7 @@
 
 (define (remove-epsilons S0 G acc)
   (match G
-    ['() (reverse acc)]
+    ['() acc]
     [`((,S -> . ,es) . ,r)
      (if (and (not (eqv? S S0)) (memv 'ε es))
          (let* ((es (remove 'ε es))
@@ -184,18 +184,13 @@
            (remove-epsilons S0 G '()))
          (remove-epsilons S0 (cdr G) (cons (car G) acc)))]))
 
-(define (fix-epsilons? S0 G)
-  (and (member* 'ε G)
-       (reverse (remove-epsilons S0 (reverse G) '()))))
-
 (define (CFG->CNF G)
   (if (null? G)
       (error "No null grammars")
       (let* ((S0 (caar G))
              (new-S0 (gensym S0))
              (G  `((,new-S0 -> ,S0) . ,G))
-             (G (let ((v (fix-epsilons? new-S0 G)))
-                  (if v v G))))
+             (G (remove-epsilons new-S0 (reverse G) '())))
         (let loop ((G G)
                    (acc '())
                    (prevs '())
@@ -215,117 +210,27 @@
             [`((,S -> (,(? symbol? P) ,(? symbol? Q)) . ,es) . ,G)
              (loop `((,S -> ,@es) . ,G) acc (set-cons `(,P ,Q) prevs) Δ?)]
             [`((,S -> ,(? symbol? P) . ,es) . ,G)
-             (if (eqv? S P)
-                 (loop `((,S -> . ,es) . ,G) acc prevs #t)
-                 (let ((ln (assv P (append acc G))))
-                   (if ln
-                       (loop `((,S -> ,@(reverse (cddr ln)) . ,es) . ,G) acc prevs #t)
-                       (loop `((,S -> . ,es) . ,G) acc prevs #t))))]
-            [`((,S -> ,(? symbol? P) . ,es) . ,G)
-             (if (eqv? S P)
-                       (loop `((,S -> . ,es) . ,G) acc prevs #t)
-                       (let ((ln (assv P (append acc G))))
-                         (if ln
-                             (loop `((,S -> ,@(reverse (cddr ln)) . ,es) . ,G) acc prevs #t)
-                             (loop `((,S -> . ,es) . ,G) acc prevs #t))))]
+             (cond
+               [(eqv? S P) (loop `((,S -> . ,es) . ,G) acc prevs #t)]
+               [(assv P (append acc G))
+                =>
+                (λ (ln)
+                  (loop `((,S -> ,@(cddr ln) . ,es) . ,G) acc prevs #t))]
+               [else (loop `((,S -> . ,es) . ,G) acc prevs #t)])]
             [`((,S -> (',a . ,ss) . ,es) . ,G)
              (let ((A (gensym S)))
-                     (loop
-                      `((,S -> (,A . ,ss) . ,es) . ,(set-cons `(,A -> ',a) G))
-                      acc
-                      prevs #t))]
+               (let ((G `((,S -> (,A . ,ss) . ,es) . ((,A -> ',a) . ,G))))
+                 (loop G acc prevs #t)))]
             [`((,S -> (,(? symbol? P) ,(? symbol? Q) . ,ss) . ,es) . ,G)
              (let ((R (gensym S)))
-                     (loop
-                      `((,S -> (,R . ,ss) . ,es) . ,(cons `(,R -> (,P ,Q)) G))
-                      acc
-                      prevs
-                      #t))]
+               (let ((G `((,S -> (,R . ,ss) . ,es) . ((,R -> (,P ,Q)) . ,G))))
+                 (loop G acc prevs #t)))]
             [`((,S -> (,(? symbol? P) ',a . ,ss) . ,es) . ,G)
              (let ((Q (gensym S))
                    (R (gensym S)))
-                     (loop
-                      `((,S -> (,R . ,ss) . ,es) . ,(append `((,R -> (,P ,Q)) (,Q -> ',a)) G))
-                      acc
-                      prevs
-                      #t))]
+               (let ((G `((,S -> (,R . ,ss) . ,es) (,R -> (,P ,Q)) (,Q -> ',a) . ,G)))
+                 (loop G acc prevs #t)))]
             [else (error 'CFG->CNF (format "invalid rule: ~s" (car G)))])))))
-
-
-#|
-(define (find-and-fix-line ln G seen prevs Δ?)
-  (match ln
-    [`(,S -> ,es ...)
-     (match es
-       ;; got through everything -- did we actually change anything?
-       ['() (and Δ? `(,@(reverse seen) (,S -> ,@(reverse prevs)) ,@G))]
-       ;; formatting fixing
-       [`((,s1) . ,es) (find-and-fix-line `(,S -> ,s1 . ,es) G seen prevs #t)]
-       ;; the start symbol is allowed to have an epsilon transition
-       ;; (we assume that by now all other epsilons have been removed)
-       [`(ε . ,es)
-        (find-and-fix-line `(,S -> ,@es) G seen `(ε . ,prevs) Δ?)]
-       ;; terminals are already CNF
-       [`(',a . ,es)
-        (find-and-fix-line `(,S -> ,@es) G seen `(',a . ,prevs) Δ?)]
-       ;; split-rules are already CNF
-       [`((,(? symbol? P) ,(? symbol? Q)) . ,es)
-        (find-and-fix-line `(,S -> ,@es) G seen (set-cons `(,P ,Q) prevs) Δ?)]
-       ;; UNIT RULES to eliminate
-       [`(,(? symbol? P) . ,es)
-        (if (eqv? S P)
-            ;; if it's a self-ref we can just drop it
-            (find-and-fix-line `(,S -> . ,es) G seen prevs #t)
-            ;; otherwise we have work to do
-            (let ((ln (assv P (append seen G))))
-              (if ln
-                  ;; we take every rule that this symbol has and give it to our current symbol as well
-                  (find-and-fix-line `(,S -> ,@(reverse (cddr ln)) . ,es) G seen prevs #t)
-                  ;; or if it has no way to succeed then we can forget about it
-                  (find-and-fix-line `(,S -> . ,es) G seen prevs #t))))]
-       [`((',a . ,ss) . ,es)
-        (let ((A (gensym S)))
-          (find-and-fix-line
-           `(,S -> (,A . ,ss) . ,es)
-           (set-cons `(,A -> ',a) G)
-           seen prevs #t))]
-       [`((,(? symbol? P) ,(? symbol? Q) . ,ss) . ,es)
-        (let ((R (gensym S)))
-          (find-and-fix-line
-           `(,S -> (,R . ,ss) . ,es)
-           (cons `(,R -> (,P ,Q)) G)
-           seen
-           prevs
-           #t))]
-       [`((,(? symbol? P) ',a . ,ss) . ,es)
-        (let ((Q (gensym S))
-              (R (gensym S)))
-          (find-and-fix-line
-           `(,S -> (,R . ,ss) . ,es)
-           (append `((,R -> (,P ,Q)) (,Q -> ',a)) G)
-           seen
-           prevs
-           #t))]
-       [l (error 'find-and-fix (format "invalid rule `(~s -> ~s)" S l))])]))
-
-
-(define (CFG->CNF G)
-  (if (null? G)
-      (error "No null grammars")
-      (let* ((S0 (caar G))
-             (new-S0 (gensym S0))
-             (G  `((,new-S0 -> ,S0) . ,G))
-             (G (let ((v (fix-epsilons? new-S0 G)))
-                  (if v v G))))
-        (let loop ((G G)
-                   (acc '()))
-          (cond
-            [(null? G)
-             (let ((G (reverse acc)))
-               (if (CNF? G) G (error "not a CNF, but nothing to fix")))]
-            [(find-and-fix-line (car G) (cdr G) acc '() #f) => (λ (G) (loop G '()))]
-            [else (loop (cdr G) (cons (car G) acc))])))))
-|#
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
