@@ -8,17 +8,9 @@
          Automaton-transition-function
          Automaton-alphabet
          Automaton-stack-alphabets
-         
-         find-words
-         accept?
-         find-words-only
-
-         find-words/display
-         accept?/display
-         find-words-only/display
-
-
-         terminal?)
+        
+         terminal?
+         run)
 
 ;; Here's a structure definition. We can use it to define finite-state automata.
 
@@ -157,8 +149,8 @@
                            (rec))))]))))]))
     ((_ M I stop? go? U b f א)
      (run M I stop? go? U b f א 'bfs #f))
-    ((_ M I stop? go? U b f א display)
-     (run M I stop? go? U b f א 'bfs #t))))
+    ((_ M I stop? go? U b f א disp?)
+     (run M I stop? go? U b f א 'bfs disp?))))
 
 
 
@@ -176,7 +168,8 @@
     (λ (_1 _2 acc) (cdr acc)))
    #f
    (λ (_1 _2) #t)
-   (λ (_ a) (if (null? (car a)) '() (list (caar a))))))
+   (λ (_ a) (if (null? (car a)) '() (list (caar a))))
+   #f))
 
 (define (accept?/display M w)
   (run
@@ -189,7 +182,7 @@
    #f
    (λ (_1 _2) #t)
    (λ (_ a) (if (null? (car a)) '() (list (caar a))))
-   display))
+   #t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; a query to get all members of a machine M's language with length up to (or equal to) k
@@ -206,7 +199,8 @@
                 (if (member w ans)
                     ans
                     (cons w ans))))
-   (λ (Σ _) Σ)))
+   (λ (Σ _) Σ)
+   #f))
 
 (define (find-words/display M k)
   (run
@@ -222,7 +216,7 @@
                     ans
                     (cons w ans))))
    (λ (Σ _) Σ)
-   display))
+   #t))
 
 (define (find-words-only M k)
   (filter (λ (x) (= (length x) k))

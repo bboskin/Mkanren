@@ -1,7 +1,7 @@
 #lang racket
 
 (require "grammars.rkt"
-         "automata.rkt")
+         "queries.rkt")
 ;; implementations of a few grammars, using
 ;; features from grammars.rkt
 

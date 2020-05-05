@@ -22,21 +22,6 @@
        (andmap (λ (x) (member x s2)) s1)
        (andmap (λ (x) (member x s1)) s2)))
 
-(define (member* s ls)
-  (cond
-    [(eqv? ls s) #t]
-    [(not (cons? ls)) #f]
-    [else (or (member* s (car ls))
-              (member* s (cdr ls)))]))
-
-(define (more-terminals? es)
-  (ormap
-   (λ (x)
-     (match x
-       [',(? terminal?) #t]
-       [else #f]))
-   es))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammars: REs and CFGs, and how to convert an RE into a CFG
 
