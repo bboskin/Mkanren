@@ -184,6 +184,46 @@
            (remove-epsilons S0 G '()))
          (remove-epsilons S0 (cdr G) (cons (car G) acc)))]))
 
+
+
+(define (CNF->CNF* G ans prevs Δ?)
+  (match G
+    ['() (if (CNF? ans) ans (error "not a CNF, but nothing to fix"))]
+    [`((,S ->) . ,G)
+     (let ((G (if Δ? `(,@ans (,S -> . ,(reverse prevs)) . ,G) G))
+           (ans (if Δ? '() (snoc `(,S -> . ,(reverse prevs)) ans))))
+       (CNF->CNF* G ans '() #f))]
+    [`((,S -> (,s1) . ,es) . ,G)
+     (CNF->CNF* `((,S -> ,s1 . ,es) . ,G) ans prevs Δ?)]
+    [`((,S -> ε . ,es) . ,G)
+     (CNF->CNF* `((,S -> . ,es) . ,G) ans `(ε . ,prevs) Δ?)]
+    [`((,S -> ',a . ,es) . ,G)
+     (CNF->CNF* `((,S -> . ,es) . ,G) ans `(',a . ,prevs) Δ?)]
+    [`((,S -> (,(? symbol? P) ,(? symbol? Q)) . ,es) . ,G)
+     (CNF->CNF* `((,S -> . ,es) . ,G) ans (set-cons `(,P ,Q) prevs) Δ?)]
+    [`((,S -> ,(? symbol? P) . ,es) . ,G)
+     (cond
+       [(eqv? S P) (CNF->CNF* `((,S -> . ,es) . ,G) ans prevs #t)]
+       [(assv P (append ans G))
+        =>
+        (λ (ln)
+          (CNF->CNF* `((,S -> ,@(cddr ln) . ,es) . ,G) ans prevs #t))]
+       [else (CNF->CNF* `((,S -> . ,es) . ,G) ans prevs #t)])]
+    [`((,S -> (',a . ,ss) . ,es) . ,G)
+     (let ((A (gensym S)))
+       (let ((G `((,S -> (,A . ,ss) . ,es) . ((,A -> ',a) . ,G))))
+         (CNF->CNF* G ans prevs #t)))]
+    [`((,S -> (,(? symbol? P) ,(? symbol? Q) . ,ss) . ,es) . ,G)
+     (let ((R (gensym S)))
+       (let ((G `((,S -> (,R . ,ss) . ,es) . ((,R -> (,P ,Q)) . ,G))))
+         (CNF->CNF* G ans prevs #t)))]
+    [`((,S -> (,(? symbol? P) ',a . ,ss) . ,es) . ,G)
+     (let ((Q (gensym S))
+           (R (gensym S)))
+       (let ((G `((,S -> (,R . ,ss) . ,es) (,R -> (,P ,Q)) (,Q -> ',a) . ,G)))
+         (CNF->CNF* G ans prevs #t)))]
+    [else (error 'CFG->CNF (format "invalid rule: ~s" (car G)))]))
+
 (define (CFG->CNF G)
   (if (null? G)
       (error "No null grammars")
@@ -191,46 +231,7 @@
              (new-S0 (gensym S0))
              (G  `((,new-S0 -> ,S0) . ,G))
              (G (remove-epsilons new-S0 (reverse G) '())))
-        (let loop ((G G)
-                   (acc '())
-                   (prevs '())
-                   (Δ? #f))
-          (match G
-            ['() (if (CNF? acc) acc (error "not a CNF, but nothing to fix"))]
-            [`((,S ->) . ,G)
-             (let ((G (if Δ? `(,@acc (,S -> . ,(reverse prevs)) . ,G) G))
-                   (acc (if Δ? '() (snoc `(,S -> . ,(reverse prevs)) acc))))
-               (loop G acc '() #f))]
-            [`((,S -> (,s1) . ,es) . ,G)
-             (loop `((,S -> ,s1 . ,es) . ,G) acc prevs Δ?)]
-            [`((,S -> ε . ,es) . ,G)
-             (loop `((,S -> . ,es) . ,G) acc `(ε . ,prevs) Δ?)]
-            [`((,S -> ',a . ,es) . ,G)
-             (loop `((,S -> . ,es) . ,G) acc `(',a . ,prevs) Δ?)]
-            [`((,S -> (,(? symbol? P) ,(? symbol? Q)) . ,es) . ,G)
-             (loop `((,S -> . ,es) . ,G) acc (set-cons `(,P ,Q) prevs) Δ?)]
-            [`((,S -> ,(? symbol? P) . ,es) . ,G)
-             (cond
-               [(eqv? S P) (loop `((,S -> . ,es) . ,G) acc prevs #t)]
-               [(assv P (append acc G))
-                =>
-                (λ (ln)
-                  (loop `((,S -> ,@(cddr ln) . ,es) . ,G) acc prevs #t))]
-               [else (loop `((,S -> . ,es) . ,G) acc prevs #t)])]
-            [`((,S -> (',a . ,ss) . ,es) . ,G)
-             (let ((A (gensym S)))
-               (let ((G `((,S -> (,A . ,ss) . ,es) . ((,A -> ',a) . ,G))))
-                 (loop G acc prevs #t)))]
-            [`((,S -> (,(? symbol? P) ,(? symbol? Q) . ,ss) . ,es) . ,G)
-             (let ((R (gensym S)))
-               (let ((G `((,S -> (,R . ,ss) . ,es) . ((,R -> (,P ,Q)) . ,G))))
-                 (loop G acc prevs #t)))]
-            [`((,S -> (,(? symbol? P) ',a . ,ss) . ,es) . ,G)
-             (let ((Q (gensym S))
-                   (R (gensym S)))
-               (let ((G `((,S -> (,R . ,ss) . ,es) (,R -> (,P ,Q)) (,Q -> ',a) . ,G)))
-                 (loop G acc prevs #t)))]
-            [else (error 'CFG->CNF (format "invalid rule: ~s" (car G)))])))))
+        (CNF->CNF* G '() '() #f))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
