@@ -151,7 +151,7 @@
                                          (א Σ a)
                                          (apply-transitions U δ s ks a)
                                          (update-epsilons s δ ks a))
-                                        (cons `(,s ,ks ,a) V)))))
+                                        `((,s ,ks ,a) . ,V)))))
                        (if (and (F? s) (all-empty? ks) (go? a))
                            (f a rec)
                            (rec))))]))))]))
