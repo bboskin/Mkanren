@@ -54,6 +54,12 @@
                (A -> 'a)
                (B -> 'b)))
 
+(define AnBn2 '((S -> ε ('a S 'b))))
+
+(define DumbBool '((S -> ('orbegin S* 'orend))
+                   (S* -> ε (S S*))
+                   ))
+
 (define Bool/SuperSimp
   '((S -> 'p ('orbegin S* 'orend))
     (S* -> ε (S S*))))
@@ -69,10 +75,9 @@
        ('orbegin S* 'orend))
     (S* -> ε (S S*))))
 
-
 (define CFGs
   (list A*/CFG A+/CFG AUB/CFG AUB*/CFG AUB+/CFG AUB•c+*/CFG
-        AnBn Bool/SuperSimp Bool/Simp Bool))
+        AnBn AnBn2 Bool/SuperSimp Bool/Simp Bool))
 
 (define (CFG-tests) (andmap CFG? CFGs))
 
@@ -83,23 +88,59 @@
 (define AUB+/CNF (CFG->CNF AUB+/CFG))
 (define AUB•c+*/CNF (CFG->CNF AUB•c+*/CFG))
 (define AnBn/CNF (CFG->CNF AnBn))
+(define DumbBool/CNF (CFG->CNF DumbBool))
 (define Bool/SuperSimp/CNF (CFG->CNF Bool/SuperSimp))
 (define Bool/Simp/CNF (CFG->CNF Bool/Simp))
 (define Bool/CNF (CFG->CNF Bool))
+(define AnBn2/CNF (CFG->CNF AnBn2))
 
 (define CNFs
   (list A*/CNF A+/CNF AUB/CNF AUB*/CNF AUB+/CNF AUB•c+*/CNF
-        AnBn/CNF Bool/SuperSimp/CNF Bool/Simp/CNF Bool/CNF))
+        AnBn/CNF AnBn2/CNF Bool/SuperSimp/CNF Bool/Simp/CNF Bool/CNF))
 
 (define (CNF-tests)
   (and (andmap CFG? CNFs)
        (andmap CNF? CNFs)))
 
-(if (and (CFG-tests) (CNF-tests))
+(if (and (CFG-tests)
+         (CNF-tests))
     (displayln "CFG->CNF conversion tests passed")
     (error "CFG->CNF conversion tests failed"))
 
 ;;;; some PDAs
 (define A*/PDA (CNF->PDA A*/CNF))
+(define A+/PDA (CNF->PDA A+/CNF))
 (define AUB/PDA (CNF->PDA AUB/CNF))
+(define AUB*/PDA (CNF->PDA AUB*/CNF))
+(define AUB+/PDA (CNF->PDA AUB+/CNF))
+(define AUB•c+*/PDA (CNF->PDA AUB•c+*/CNF))
+(define AnBn/PDA (CNF->PDA AnBn/CNF))
+(define AnBn2/PDA (CNF->PDA AnBn2/CNF))
+(define DumbBool/PDA (CNF->PDA DumbBool/CNF))
+(define Bool/SuperSimp/PDA (CNF->PDA Bool/SuperSimp/CNF))
+(define Bool/Simp/PDA (CNF->PDA Bool/Simp/CNF))
+(define Bool/PDA (CNF->PDA Bool/CNF))
+
+
+(define (PDA-tests)
+  (and (equal? '(() (a) (a a) (a a a))
+               (find-words A*/PDA 3))
+       (equal? (cdr (find-words A*/PDA 10))
+               (find-words A+/PDA 10))
+       (equal? (find-words AUB/PDA 100) '((a) (b)))
+       (accept? AUB*/PDA '())
+       (accept? AUB*/PDA '(a b a b b a a a a a))
+       (not (accept? AUB*/PDA '(a b a b b c a a a a a)))
+       (not (accept? AUB+/PDA '()))
+       (accept? AUB+/PDA '(a b a b b a a a a a))
+       (equal? (find-words AUB•c+*/PDA 0) '(()))
+       (equal? (find-words AUB•c+*/PDA 2) '(() (a) (a a) (b c)))
+       (accept? AUB•c+*/PDA '(a b c a b c b c b c))
+       (not (accept? AUB•c+*/PDA '(a b c a b b c b c)))
+       (equal? (find-words AnBn/PDA 10) (find-words AnBn2/PDA 10))
+       (set-equal? (find-words  AUB•c+*/PDA 4) (find-words  AUB•c+*/DFA 4))))
+
+(if (PDA-tests)
+    (displayln "PDA tests passed")
+    (error "PDA tests failed"))
 
