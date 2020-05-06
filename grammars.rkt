@@ -1,12 +1,11 @@
 #lang racket
 
-(require "automata.rkt")
+(require "basics.rkt")
 
 (provide RE? CFG? CNF?
          RE->CFG CFG->CNF
          RE->DFA CNF->PDA
- 
- set-equal?)
+         set-equal??)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammars: REs and CFGs, and how to convert an RE into a CFG

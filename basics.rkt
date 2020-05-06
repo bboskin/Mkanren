@@ -1,31 +1,38 @@
 #lang racket
 
 (provide Automaton
-
          Automaton-start-state
-         Automaton-final-state
+         Automaton-final-states
          Automaton-all-states
          Automaton-transition-function
          Automaton-alphabet
          Automaton-stack-alphabets
+        
+         terminal?
          
-         find-words
-         accept?
-         find-words-only
+         run
 
-         find-words/display
-         accept?/display
-         find-words-only/display)
+         ;; basics
+         set-cons
+         set-union
+         set-difference
+         set-intersection
+         set-equal??
+         
+         snoc
+         member-of)
+
+
 
 ;; Here's a structure definition. We can use it to define finite-state automata.
 
 (struct Automaton
   [start-state         ;; S
-   final-state         ;; F
+   final-states        ;; F
    all-states          ;; Q
    transition-function ;; δ
    alphabet            ;; Σ
-   stack-alphabets]    ;; (a list of Γs, with one alphabet for each stack)
+   stack-alphabets]    ;; (a list of Γs, with one alphabet for each stack, so we can have as many stacks as we want without changing anything!)
   #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -36,10 +43,20 @@
 
 
 
+;; Lists
+
+(define (snoc x s) (foldr cons `(,x) s))
+(define (member-of s) (λ (x) (member x s)))
+
 ;; Sets
-(define (set-cons x s)
-  (if (member x s) s (cons x s)))
+(define (set-cons x s) (if (member x s) s (cons x s)))
 (define (set-union s1 s2) (foldr set-cons s2 s1))
+(define (set-difference s1 s2) (foldr remove s1 s2))
+(define (set-intersection s1 s2) (filter (member-of s2) s1))
+
+(define (set-equal?? s1 s2)
+  (and (andmap (λ (x) (member x s2)) s1)
+       (andmap (λ (x) (member x s1)) s2)))
 
 ;; Stacks 
 (define (stack-empty? k) (equal? k '(#f)))
@@ -53,6 +70,13 @@
      (and (eqv? s γ) (append vs ks))]
     [(`(,s . ,ks) 'preserve-stack)
      (cons s ks)]))
+
+
+;; symbols allowed to part of Σ
+(define (terminal? x)
+  (and (not (eqv? x 'ε))
+       (or (symbol? x)
+           (member x '(0 1 2 3 4 5 6 7 8 9)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; frontier-based breadth-first search
@@ -69,10 +93,10 @@
 (define (F0 S Γ I) `((,S ,(build-list (length Γ) (λ (_) '(#f))) ,I)))
 
 (define (Fk A δ U search)
-  (λ (old L δ)
+  (λ (old L δ ε)
     (match search
-      ['dfs (append (foldr set-union '() (map δ L)) old)]
-      ['bfs (append old (foldr set-union '() (map δ L)))])))
+      ['dfs (append (foldr set-union '() (map δ L)) ε old)]
+      ['bfs (append old ε (foldr set-union '() (map δ L)))])))
 
 
 
@@ -96,7 +120,17 @@
    (λ (t a)
      (match t
        [`(,s1 ε ,s2 . ,stack-conds) a]
-       [`(,s1 ,cond ,s2 . ,stack-conds)
+       [`(,s1 ,(? terminal? v) ,s2 . ,stack-conds)
+        (if (and (eqv? s s1) (eqv? i v))
+            (let ((new-stacks (map check-stacks ks stack-conds))
+                  (new-accs (map (λ (u a) (u s i a)) U acc)))
+              (if (andmap id new-stacks)
+                  `((,s2 ,new-stacks ,new-accs) . ,a)
+                  a))
+            a)]
+       ;; users can define transitions using more general conditions
+       ;; if they so desire. Automatically generated machines don't use this.
+       [`(,s1 ,(? procedure? cond) ,s2 . ,stack-conds)
         (if (and (eqv? s s1) (cond i))
             (let ((new-stacks (map check-stacks ks stack-conds))
                   (new-accs (map (λ (u a) (u s i a)) U acc)))
@@ -108,48 +142,40 @@
    δ))
 
 (define-syntax run
-  (syntax-rules ()
-    ((_ M I stop? go? U b f א Π)
+  (syntax-rules (display)
+    ((_ M I stop? go? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
         (let ((T (F0 S Γ I))
               (update-T (Fk A δ U Π))
               (F? (final-state? F)))
           (let loop ((T T)
-                     (ε '()))
-            (match T
-              ['() (if (null? ε) b (loop ε '()))]
-              [`((,s ,ks ,(? stop?)) . ,rest) (loop '() '())]
-              [`((,s ,ks ,a) . ,rest)
-               (let ((ε (set-union ε (update-epsilons s δ ks a))))
-                 (let ((rec (λ () (loop (update-T rest (א Σ a) (apply-transitions U δ s ks a)) ε))))
-                   (if (and (F? s) (all-empty? ks) (go? a))
-                       (f a rec)
-                       (rec))))])))]))
+                     (V '()))
+            (begin
+              (if disp? (displayln T) void)
+              (match T
+                ['() b]
+                [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V)]
+                [`((,s ,ks ,a) . ,rest)
+                 
+                 (if (member `(,s ,ks ,a) V)
+                     (loop rest V)
+                     (let ((rec (λ ()
+                                  (loop (update-T
+                                         rest
+                                         (א Σ a)
+                                         (apply-transitions U δ s ks a)
+                                         (update-epsilons s δ ks a))
+                                        `((,s ,ks ,a) . ,V)))))
+                       (if (and (F? s) (all-empty? ks) (go? a))
+                           (f a rec)
+                           (rec))))]))))]))
     ((_ M I stop? go? U b f א)
-     (run M I stop? go? U b f א 'bfs))))
+     (run M I stop? go? U b f א 'bfs #f))
+    ((_ M I stop? go? U b f א disp?)
+     (run M I stop? go? U b f א 'bfs disp?))))
 
-(define-syntax run/display
-  (syntax-rules ()
-    ((_ M I stop? go? U b f א Π)
-     (match M
-       [(Automaton S F A δ Σ Γ)
-        (let ((T (F0 S Γ I))
-              (update-T (Fk A δ U Π))
-              (F? (final-state? F)))
-          (let loop ((T T))
-            (displayln T)
-            (match T
-              ['() b]
-              [`((,s ,ks ,(? stop?)) . ,rest) (loop '())]
-              [`((,s ,ks ,a) . ,rest)
-               (let ((new-states/ε (update-epsilons s δ ks a)))
-                 (let ((rec (λ () (loop (update-T rest (א Σ a) (apply-transitions U δ s ks a) new-states/ε)))))
-                   (if (and (F? s) (all-empty? ks) (go? a))
-                       (f a rec)
-                       (rec))))])))]))
-    ((_ M I stop? go? U b f א)
-     (run/display M I stop? go? U b f א 'bfs))))
+
 
 
 
@@ -165,10 +191,11 @@
     (λ (_1 _2 acc) (cdr acc)))
    #f
    (λ (_1 _2) #t)
-   (λ (_ a) (if (null? (car a)) '() (list (caar a))))))
+   (λ (_ a) (if (null? (car a)) '() (list (caar a))))
+   #f))
 
 (define (accept?/display M w)
-  (run/display
+  (run
    M
    `(,w)
    (λ (_) #f)
@@ -177,7 +204,8 @@
     (λ (_1 _2 acc) (cdr acc)))
    #f
    (λ (_1 _2) #t)
-   (λ (_ a) (if (null? (car a)) '() (list (caar a))))))
+   (λ (_ a) (if (null? (car a)) '() (list (caar a))))
+   #t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; a query to get all members of a machine M's language with length up to (or equal to) k
@@ -194,10 +222,11 @@
                 (if (member w ans)
                     ans
                     (cons w ans))))
-   (λ (Σ _) Σ)))
+   (λ (Σ _) Σ)
+   #f))
 
 (define (find-words/display M k)
-  (run/display
+  (run
    M
    '(())
    (λ (a) (> (length (car a)) k))
@@ -209,12 +238,13 @@
                 (if (member w ans)
                     ans
                     (cons w ans))))
-   (λ (Σ _) Σ)))
+   (λ (Σ _) Σ)
+   #t))
 
 (define (find-words-only M k)
-  (filter (λ (x) (= (length x) k)) (find-words M k)))
+  (filter (λ (x) (= (length x) k))
+          (find-words M k)))
 
 (define (find-words-only/display M k)
-  (filter (λ (x) (= (length x) k)) (find-words/display M k)))
-
-
+  (filter (λ (x) (= (length x) k))
+          (find-words/display M k)))

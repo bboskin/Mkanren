@@ -125,7 +125,7 @@
                (find-words A*/PDA 3))
        (equal? (cdr (find-words A*/PDA 10))
                (find-words A+/PDA 10))
-       (set-equal? (find-words AUB/PDA 100) '((a) (b)))
+       (set-equal?? (find-words AUB/PDA 100) '((a) (b)))
        (accept? AUB*/PDA '())
        (accept? AUB*/PDA '(a b a b b a a a a a))
        (not (accept? AUB*/PDA '(a b a b b c a a a a a)))
@@ -136,12 +136,11 @@
        (not (accept? AUB•c+*/PDA '(a b c a b b c b c)))
        (equal? (find-words AnBn/PDA 10) (find-words AnBn2/PDA 10))
        
-       (set-equal? (find-words AUB•c+*/PDA 2) '(() (a) (a a) (b c)))
-       (set-equal? (find-words AUB•c+*/PDA 4) (find-words AUB•c+*/DFA 4))
-       (set-equal? (find-words A*/PDA 4) (find-words A*/DFA 4))
-       (set-equal? (find-words A+/PDA 4) (find-words A+/DFA 4))
-       (set-equal? (find-words AUB/PDA 4) (find-words AUB/DFA 4))
-       (set-equal? (find-words AUB+/PDA 4) (find-words AUB+/DFA 4))
+       (set-equal?? (find-words AUB•c+*/PDA 2) '(() (a) (a a) (b c)))
+       (set-equal?? (find-words AUB•c+*/PDA 4) (find-words AUB•c+*/DFA 4))
+       (set-equal?? (find-words A*/PDA 4) (find-words A*/DFA 4))
+       (set-equal?? (find-words A+/PDA 4) (find-words A+/DFA 4))
+       (set-equal?? (find-words AUB+/PDA 4) (find-words AUB+/DFA 4))
        (accept? Bool/PDA
                 '(andbegin not orbegin p q orend p not q not not p andbegin andend andend))
        (not

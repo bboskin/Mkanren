@@ -1,14 +1,9 @@
 #lang racket
 
-(require "automata.rkt"
+(require "basics.rkt"
+         "queries.rkt"
          "grammars.rkt")
 (provide (all-defined-out))
-
-
-;; In this document, we play with an intellectual exercise,
-;; tackling satisfiability and model discovery
-;; with finite-state automata.
-;; (TODO) in the document automata.pie we explore a similar® exercise and related proofs with dependent types in Pie.
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; There's a very special and important mathemagical object, called the finite-state automaton.
@@ -196,6 +191,10 @@ b [a U b]* d* = "b", "baaaa", "bad", "babababababaabababbabaababbadddddddd", ...
      (A ,(λ (x) (eqv? x 'a)) A))
    Alphabet
    '()))
+
+
+
+
 #|
 
                     ___
@@ -320,7 +319,7 @@ b [a U b]* d* = "b", "baaaa", "bad", "babababababaabababbabaababbadddddddd", ...
 (define East-Bay2-2 (find-words East-Bay2 2))
 (define East-Bay2-3 (find-words East-Bay2 3))
 (define East-Bay2-4 (find-words East-Bay2 4))
-
+#|
 ;;;;;;;;;;;;;;;;
 ;; CFGs and PDAs
 
@@ -464,4 +463,4 @@ b [a U b]* d* = "b", "baaaa", "bad", "babababababaabababbabaababbadddddddd", ...
      (OneP ,orbegin? Many (pop on O push (O O))))
    Logic-Terms
    '((A O))))
-
+|#
