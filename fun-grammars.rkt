@@ -14,7 +14,6 @@
 
 ;; stuff to do with boolean logic
 
-
 #|
 
 

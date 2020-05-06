@@ -17,7 +17,9 @@
          set-union
          set-difference
          set-intersection
+
          set-equal??
+
          
          snoc
          member-of)
@@ -53,7 +55,6 @@
 (define (set-union s1 s2) (foldr set-cons s2 s1))
 (define (set-difference s1 s2) (foldr remove s1 s2))
 (define (set-intersection s1 s2) (filter (member-of s2) s1))
-
 (define (set-equal?? s1 s2)
   (and (andmap (λ (x) (member x s2)) s1)
        (andmap (λ (x) (member x s1)) s2)))
