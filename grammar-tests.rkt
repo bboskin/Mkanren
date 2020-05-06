@@ -1,6 +1,7 @@
 #lang racket
 
 (require "grammars.rkt"
+         "G-to-M.rkt"
          "queries.rkt")
 ;; implementations of a few grammars, using
 ;; features from grammars.rkt
