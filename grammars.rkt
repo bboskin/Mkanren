@@ -148,9 +148,7 @@
          (let* ((es (remove 'ε es))
                 (G (map
                     (add-epsilon-subs S)
-                    `(,@(reverse acc)
-                      ,@(if (null? es) '() `((,S -> . ,es)))
-                      ,@r))))
+                    `(,@acc (,S -> . ,es) ,@r))))
            (remove-epsilons S0 G '()))
          (remove-epsilons S0 (cdr G) (cons (car G) acc)))]))
 
@@ -199,12 +197,21 @@
       (error "No null grammars")
       (let* ((S0 (caar G))
              (new-S0 (gensym S0))
-             (G  `((,new-S0 -> ,S0) . ,G))
-             (G (remove-epsilons new-S0 (reverse G) '())))
+             (G (remove-epsilons new-S0 `(,@G (,new-S0 -> ,S0)) '())))
         (CNF->CNF* G '() '() #f))))
 
 
-(define (minimize-CNF CNF)
+
+;;;;;;;;;;;;;;;;;
+;; minimizing CNF
+
+(define (group-terminals? G)
   'TODO)
+
+(define (minimize-CNF CNF)
+  3 #;(cond
+    [(group-terminals? CNF)
+     => (λ (G) (minimize-CNF G))]
+    [()]))
 
 

@@ -142,6 +142,7 @@
        (set-equal?? (find-words A*/PDA 4) (find-words A*/DFA 4))
        (set-equal?? (find-words A+/PDA 4) (find-words A+/DFA 4))
        (set-equal?? (find-words AUB+/PDA 4) (find-words AUB+/DFA 4))
+       
        (accept? Bool/PDA
                 '(andbegin not orbegin p q orend p not q not not p andbegin andend andend))
        (not
