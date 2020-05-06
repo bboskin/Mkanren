@@ -1,6 +1,9 @@
 #lang racket
 
-(require "grammars.rkt" "basics.rkt" "queries.rkt")
+(require "grammars.rkt"
+         "basics.rkt"
+         "queries.rkt"
+         "G-to-M.rkt")
 
 ;;;; stuff to do with number processing
 
@@ -24,6 +27,12 @@
 381
 >
 
+;; AFTER CNF minimization efforts
+> (length (Automaton-all-states Val-of))
+70
+> (length (Automaton-transition-function Val-of))
+262
+
 |#
 
 
@@ -42,7 +51,6 @@
            ('andbegin Value* False Value* 'andend)
            ('orbegin False* 'orend))
     (False* -> ε (False False*))
-    
     (Value -> True False)
     (Value* -> ε (Value Value*))))
 

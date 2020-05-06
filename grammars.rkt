@@ -198,20 +198,40 @@
       (let* ((S0 (caar G))
              (new-S0 (gensym S0))
              (G (remove-epsilons new-S0 `(,@G (,new-S0 -> ,S0)) '())))
-        (CNF->CNF* G '() '() #f))))
+        (minimize-CNF (CNF->CNF* G '() '() #f)))))
 
 
 
 ;;;;;;;;;;;;;;;;;
 ;; minimizing CNF
 
-(define (group-terminals? G)
-  'TODO)
+(define (replace* old new x)
+  (cond
+    [(equal? x old) new]
+    [(cons? x)
+     (cons (replace* old new (car x))
+           (replace* old new (cdr x)))]
+    [else x]))
 
-(define (minimize-CNF CNF)
-  3 #;(cond
-    [(group-terminals? CNF)
-     => (λ (G) (minimize-CNF G))]
-    [()]))
+(define (minimize-CNF-help S es G)
+  (let loop ((G G)
+             (acc '()))
+    (match G
+      ['() #f]
+      [`((,P -> . ,es2) . ,G)
+       (if (and (not (eqv? P S)) (set-equal?? es es2))
+           (replace* P S (append acc G))
+           (loop G `(,@acc (,P -> . ,es2))))])))
+
+(define (minimize-CNF G)
+  (let loop ((G G)
+             (acc '()))
+    (match G
+      ['() acc]
+      [`((,S -> . ,es) . ,G)
+       (cond
+         [(minimize-CNF-help S es (append acc (cons `(,S -> . ,es) G)))
+          => (λ (G) (loop G '()))]
+         [else (loop G `(,@acc (,S -> . ,es)))])])))
 
 
