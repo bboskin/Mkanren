@@ -46,10 +46,10 @@
 (define (CFG? G)
   (match G
     ['() #t]
-    [`((,S -> ,es ...) . ,r)
-     (and (not (null? es))
+    [`((,S -> . ,es) . ,G)
+     (and (not (null? es)) 
           (andmap production-rule? es)
-          (CFG? r))]))
+          (CFG? G))]))
 
 (define (CNF? G)
   (let ((S0 (caar G)))
@@ -274,10 +274,10 @@
         (cadr pr?)
         (error (format "No values for ~s" S)))))
 
-(define (grow S ρ r M)
-  (let ((Sf (final-state S ρ)))
-    (match M
-      [(Automaton S0 F A δ Σ Γ)
+(define (add S ρ r M)
+  (match M
+    [(Automaton S0 F A δ Σ Γ)
+     (let  ((Sf (final-state S ρ)))
        (match r
          ['ε (Automaton S0 F A (set-cons `(,S ε ,Sf preserve-stack) δ) Σ Γ)]
          [`',a
@@ -294,7 +294,7 @@
               (let ((δ (set-union `(,S->P ,P->Q ,Q->F) δ))
                     (Γ `((,γ . ,(car Γ)))))
                 (Automaton S0 F A δ Σ Γ))))]
-         [else (error "unknown rule format")])])))
+         [else (error "unknown rule format")]))]))
 
 (define (init-M ρ)
   (let* ((S0 (caar ρ))
@@ -304,11 +304,10 @@
 
 (define (CNF->PDA G)
   (let ((ρ (env (map car G))))
-    (let go ((G G) (M (init-M ρ)))
+    (let go ((M (init-M ρ))
+             (G G))
       (match G
         ['() M]
-        [`((,S ->) . ,G)
-         (go G M)]
+        [`((,S ->) . ,G) (go M G)]
         [`((,S -> ,e ,es ...) . ,G)
-         (go `((,S -> . ,es) . ,G)
-             (grow S ρ e M))]))))
+         (go (add S ρ e M) `((,S -> . ,es) . ,G))]))))
