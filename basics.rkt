@@ -12,7 +12,7 @@
          
          run
 
-         ;; basics
+         ;; set basics
          set-cons
          set-union
          set-difference
@@ -20,9 +20,12 @@
 
          set-equal??
 
-         
+         ;; list basics
          snoc
-         member-of)
+         member-of
+
+         ;; variable name management
+         symbol-append)
 
 
 
@@ -44,6 +47,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+;; Variable names
+(define (symbol-append s1 s2)
+  (string->symbol
+   (string-append
+    (symbol->string s1)
+    (symbol->string s2))))
 
 ;; Lists
 
@@ -158,7 +167,6 @@
                 ['() b]
                 [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V)]
                 [`((,s ,ks ,a) . ,rest)
-                 
                  (if (member `(,s ,ks ,a) V)
                      (loop rest V)
                      (let ((rec (λ ()
@@ -175,77 +183,3 @@
      (run M I stop? go? U b f א 'bfs #f))
     ((_ M I stop? go? U b f א disp?)
      (run M I stop? go? U b f א 'bfs disp?))))
-
-
-
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; the standard query to check if a machine M accepts a word w
-(define (accept? M w)
-  (run
-   M
-   `(,w)
-   (λ (_) #f)
-   (λ (a) (null? (car a)))
-   (list
-    (λ (_1 _2 acc) (cdr acc)))
-   #f
-   (λ (_1 _2) #t)
-   (λ (_ a) (if (null? (car a)) '() (list (caar a))))
-   #f))
-
-(define (accept?/display M w)
-  (run
-   M
-   `(,w)
-   (λ (_) #f)
-   (λ (a) (null? (car a)))
-   (list
-    (λ (_1 _2 acc) (cdr acc)))
-   #f
-   (λ (_1 _2) #t)
-   (λ (_ a) (if (null? (car a)) '() (list (caar a))))
-   #t))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; a query to get all members of a machine M's language with length up to (or equal to) k
-(define (find-words M k)
-  (run
-   M
-   '(())
-   (λ (a) (> (length (car a)) k))
-   (λ (a) #t)
-   (list (λ (_ i a) (cons i a)))
-   '()
-   (λ (a ans) (let ((w (reverse (car a)))
-                    (ans (ans)))
-                (if (member w ans)
-                    ans
-                    (cons w ans))))
-   (λ (Σ _) Σ)
-   #f))
-
-(define (find-words/display M k)
-  (run
-   M
-   '(())
-   (λ (a) (> (length (car a)) k))
-   (λ (a) #t)
-   (list (λ (_ i a) (cons i a)))
-   '()
-   (λ (a ans) (let ((w (reverse (car a)))
-                    (ans (ans)))
-                (if (member w ans)
-                    ans
-                    (cons w ans))))
-   (λ (Σ _) Σ)
-   #t))
-
-(define (find-words-only M k)
-  (filter (λ (x) (= (length x) k))
-          (find-words M k)))
-
-(define (find-words-only/display M k)
-  (filter (λ (x) (= (length x) k))
-          (find-words/display M k)))

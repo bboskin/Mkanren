@@ -5,7 +5,12 @@
 (provide RE? CFG? CNF?
          RE->CFG CFG->CNF
          minimize-CNF
-         set-equal??)
+         set-equal??
+
+         G-Union
+         G-Concatenation
+         G-Difference
+         G-Intersection)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammars: REs and CFGs, and how to convert an RE into a CFG
@@ -129,10 +134,9 @@
                    (match ln
                      ['ε (set-cons 'ε a)]
                      [(? symbol? s)
-                      (if (eqv? P S) a
-                          (if (eqv? s S)
-                              (set-cons 'ε (set-cons s a))
-                              (set-cons s a)))]
+                      (if (eqv? s S)
+                          (set-cons 'ε (set-cons s a))
+                          (set-cons s a))]
                      [`',(? symbol? s) (set-cons `',s a)]
                      [else (append (map (λ (x)
                                           (if (= (length x) 1) (car x) x))
@@ -148,15 +152,15 @@
          (let* ((es (remove 'ε es))
                 (G (map
                     (add-epsilon-subs S)
-                    `(,@acc (,S -> . ,es) ,@r))))
+                    `(,@acc (,S -> . ,es) . ,r))))
            (remove-epsilons S0 G '()))
-         (remove-epsilons S0 (cdr G) (cons (car G) acc)))]))
+         (remove-epsilons S0 (cdr G) (snoc (car G) acc)))]))
 
 
 
 (define (CNF->CNF* G ans prevs Δ?)
   (match G
-    ['() (if (CNF? ans) ans (error "not a CNF, but nothing to fix"))]
+    ['() (if (CNF? ans) ans (error (format "not a CNF, but nothing to fix ~s" ans)))]
     [`((,S ->) . ,G)
      (let ((G (if Δ? `(,@ans (,S -> . ,(reverse prevs)) . ,G) G))
            (ans (if Δ? '() (snoc `(,S -> . ,(reverse prevs)) ans))))
@@ -179,11 +183,11 @@
        [else (CNF->CNF* `((,S -> . ,es) . ,G) ans prevs #t)])]
     [`((,S -> (',a . ,ss) . ,es) . ,G)
      (let ((A (gensym S)))
-       (let ((G `((,S -> (,A . ,ss) . ,es) . ((,A -> ',a) . ,G))))
+       (let ((G `((,S -> (,A . ,ss) . ,es) (,A -> ',a) . ,G)))
          (CNF->CNF* G ans prevs #t)))]
     [`((,S -> (,(? symbol? P) ,(? symbol? Q) . ,ss) . ,es) . ,G)
      (let ((R (gensym S)))
-       (let ((G `((,S -> (,R . ,ss) . ,es) . ((,R -> (,P ,Q)) . ,G))))
+       (let ((G `((,S -> (,R . ,ss) . ,es) (,R -> (,P ,Q)) . ,G)))
          (CNF->CNF* G ans prevs #t)))]
     [`((,S -> (,(? symbol? P) ',a . ,ss) . ,es) . ,G)
      (let ((Q (gensym S))
@@ -197,7 +201,7 @@
       (error "No null grammars")
       (let* ((S0 (caar G))
              (new-S0 (gensym S0))
-             (G (remove-epsilons new-S0 `(,@G (,new-S0 -> ,S0)) '())))
+             (G (remove-epsilons new-S0 `((,new-S0 -> ,S0) ,@G) '())))
         (minimize-CNF (CNF->CNF* G '() '() #f)))))
 
 
@@ -233,5 +237,49 @@
          [(minimize-CNF-help S es (append acc (cons `(,S -> . ,es) G)))
           => (λ (G) (loop G '()))]
          [else (loop G `(,@acc (,S -> . ,es)))])])))
+
+
+
+
+
+;;;;;;;;;;;;;;
+;; set operations on grammars
+
+;; to ensure separate namespaces
+
+(define ((rename-rule ext) e)
+  (match e
+    ['ε 'ε]
+    [`',a `',a]
+    [(? symbol?) (symbol-append e ext)]
+    [`(,es ...) (map (rename-rule ext) es)]))
+
+(define (rename-grammar ext G)
+  (match G
+    ['() '()]
+    [`((,S ->) . ,G)
+     `((,(symbol-append S ext) ->) . ,(rename-grammar ext G))]
+    [`((,S -> ,e ,es ...) . ,G)
+     (match (rename-grammar ext `((,S -> . ,es) . ,G))
+       [`((,S -> ,es ...) . ,G)
+        `((,S -> ,((rename-rule ext) e) . ,es) . ,G)])]))
+
+
+(define (G-Union G1 G2)
+  (let ((G2 (rename-grammar 'b G2))
+        (S0 (gensym 'Start)))
+    `((,S0 -> ,(caar G1) ,(caar G2))
+      ,@G1
+      ,@G2)))
+
+(define (G-Concatenation G1 G2)
+  'TODO)
+
+
+
+(define G-Intersection
+  'TODO)
+(define G-Difference
+  'TODO)
 
 

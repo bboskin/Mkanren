@@ -153,3 +153,4 @@
     (displayln "PDA tests passed")
     (error "PDA tests failed"))
 
+(define A*UAnBn (G-Union A*/CFG AnBn))

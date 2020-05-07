@@ -2,7 +2,8 @@
 
 (require "basics.rkt"
          "grammars.rkt")
-(provide RE->DFA CNF->PDA)
+(provide RE->DFA CNF->PDA
+         )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Automated generation of abstract machines from grammars
@@ -109,5 +110,22 @@
         ['() M]
         [`((,S ->) . ,G) (go M G)]
         [`((,S -> ,e ,es ...) . ,G)
-         (go (add S ρ e M) `((,S -> . ,es) . ,G))]))))
+         (go (add S ρ e M)
+             `((,S -> . ,es) . ,G))]))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
          
