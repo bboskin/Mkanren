@@ -171,25 +171,26 @@
               (update-T (Fk A δ U Π))
               (F? (final-state? F)))
           (let loop ((T T)
-                     (V '()))
+                     (V '())
+                     (A b))
             (begin
               (if disp? (displayln T) void)
               (match T
-                ['() b]
-                [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V)]
+                ['() A]
+                [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V A)]
                 [`((,s ,ks ,a) . ,rest)
                  (if (member `(,s ,ks ,a) V)
-                     (loop rest V)
-                     (let ((rec (λ ()
-                                  (loop (update-T
-                                         rest
-                                         (א Σ a)
-                                         (apply-transitions U δ s ks a)
-                                         (update-epsilons s δ ks a))
-                                        `((,s ,ks ,a) . ,V)))))
-                       (if (and (F? s) (all-empty? ks) (go? a))
-                           (f a rec)
-                           (rec))))]))))]))
+                     (loop rest V A)
+                     (let ((T (update-T
+                               rest
+                               (א Σ a)
+                               (apply-transitions U δ s ks a)
+                               (update-epsilons s δ ks a)))
+                           (V `((,s ,ks ,a) . ,V))
+                           (A (if (and (F? s) (all-empty? ks) (go? a))
+                                  (f a A)
+                                  A)))
+                       (loop T V A)))]))))]))
     ((_ M I stop? go? U b f א)
      (run M I stop? go? U b f א 'bfs #f))
     ((_ M I stop? go? U b f א disp?)

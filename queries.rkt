@@ -4,9 +4,6 @@
 
 (provide  find-words accept?)
 
-
-
-
 (define-syntax accept?
   (syntax-rules ()
     [(_ M w) (accept? M w #f)]
@@ -17,7 +14,7 @@
           (λ (a) (null? (car a)))
           (list (λ (_1 _2 acc) (cdr acc)))
           #f
-          (λ (_1 _2) #t)
+          (λ (a A) #t)
           (λ (_ a) (if (null? (car a)) '() (list (caar a))))
           disp?)]))
 
@@ -32,10 +29,10 @@
       (λ (a) #t)
       (list (λ (_ i a) (cons i a)))
       '()
-      (λ (a ans)
-        (let ((w (reverse (car a)))
-              (ans (ans)))
-          (if (member w ans)
+      (λ (a A)
+        (let ((w (reverse (car a))))
+          (set-cons w A)
+          #;(if (member w ans)
               ans
               (cons w ans))))
       (λ (Σ _) Σ)
