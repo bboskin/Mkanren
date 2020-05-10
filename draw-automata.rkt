@@ -1,9 +1,7 @@
 #lang racket
 
 
-(require 2htdp/image
-         "basics.rkt"
-         "grammar-tests.rkt")
+(require 2htdp/image "basics.rkt")
 
 (provide draw-automaton
          make-PDA-dance)
@@ -175,6 +173,7 @@
     [0 (shuffle-one ls (random (length ls)))]
     [1 (move-one-back ls (random (length ls)))]
     [2 (move-one-forward ls (random (length ls)))]))
+
 (define (draw-arrangement S F δ)
   (λ (cols)
     (let ((coords (make-coords cols (length cols) 1)))

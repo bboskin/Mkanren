@@ -44,7 +44,6 @@
 194
 |#
 
-
 (define val-of
   '((True ->
           't
@@ -87,6 +86,15 @@
 #;
 (big-bang Eng/min
     [to-draw draw-automaton])
+
+;; there's a bug somewhere, unminimized version is right
+(equal?
+ (accept?
+  Val-of/min
+  '(andbegin not not t not orbegin f  not andbegin andend orend andend))
+ (accept?
+  Val-of
+  '(andbegin not not t not orbegin f  not andbegin andend orend andend)))
 
 
 
