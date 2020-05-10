@@ -30,7 +30,7 @@
          (Automaton S2 F2 A2 δ2 Σ2 Γ2))
         (let ((new-S (gensym 'S)))
           (Automaton
-           new-S (set-union F1 F2) (set-union A1 A2)
+           new-S (set-union F1 F2) (cons new-S (set-union A1 A2))
            (append `((,new-S ε ,S1) (,new-S ε ,S2)) (set-union δ1 δ2))
            (set-union Σ1 Σ2)
            '()))])]

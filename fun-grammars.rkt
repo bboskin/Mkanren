@@ -4,7 +4,8 @@
          "machines.rkt"
          "basics.rkt"
          "queries.rkt"
-         "G-to-M.rkt")
+         "G-to-M.rkt"
+         "draw-automata.rkt")
 
 (provide (all-defined-out))
 ;;;; stuff to do with number processing
@@ -63,6 +64,14 @@
 
 (define Val-of (CNF->PDA (CFG->CNF val-of)))
 (define Val-of/min (minimize-PDA Val-of))
+
+;; drawing them
+(require 2htdp/universe)
+
+
+(big-bang even?/DFA
+    [to-draw draw-automaton])
+
 
 
 

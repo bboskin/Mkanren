@@ -7,7 +7,7 @@
 
 (provide (all-defined-out))
 
-(define test? #f)
+(define test? #t)
 ;; implementations of a few grammars, using
 ;; features from grammars.rkt
 

@@ -5,8 +5,10 @@
          "basics.rkt"
          "grammar-tests.rkt")
 
-(define SCENE-HEIGHT 400)
-(define SCENE-WIDTH 560)
+(provide draw-automaton)
+
+(define SCENE-HEIGHT 900)
+(define SCENE-WIDTH 960)
 (define (LAYER-DIST k) (/ SCENE-HEIGHT (add1 k)))
 (define BORDER-BUFFER 0)
 (define STATE-SIZE 20)
@@ -38,11 +40,19 @@
 
 
 (define (draw-transition from to I)
-  (add-line
-    I
-    (car from) (cadr from)
-    (car to) (cadr to)
-    "black"))
+  (if (equal? from to)
+      (place-image/align
+       (ellipse 40 50 "outline" "black")
+        
+        (car from)(cadr from) "center" 
+       "bottom"
+       I)
+      (add-line
+       I
+       (car from) (cadr from)
+       (car to) (cadr to)
+       "black")
+      ))
 
 
 (define (reachable-from δ l)
@@ -61,8 +71,8 @@
              (curr-layer `(,S)))
     (cond
       [(null? undrawn) `(,curr-layer)]
-      ;; unreachable states!
-      [(null? curr-layer) (loop '() undrawn)]
+      ;; if there are unreachable states!
+      [(null? curr-layer) `(,undrawn)]
       [else
        (let ((next-layer
               (foldr (λ (x a)
@@ -95,7 +105,6 @@
    (λ (c i)
      (match c
        [`(,n ,x ,y)
-        (displayln n)
         (cond
           [(and (eqv? n S) (memv n F)) (place-image (draw-final-start-state (symbol->string n))  x y i)]
           [(eqv? n S) (place-image (draw-start-state (symbol->string n)) x y i)]
@@ -105,13 +114,18 @@
    coords))
 
 (define (draw-transitions coords δ I)
+  (displayln δ)
   (foldr
    (λ (x a)
      (match x
        [`(,S1 ,on ,S2 . ,rs)
-        (let ((c1 (cdr (assv S1 coords)))
-              (c2 (cdr (assv S2 coords))))
-          (draw-transition c1 c2 a))]))
+        (let ((c1 (assv S1 coords))
+              (c2 (assv S2 coords)))
+          (if (and c1 c2)
+              (draw-transition (cdr c1) (cdr c2) a)
+              (if c1
+                  (error (format "no value for ~s" S2))
+                  (error (format "no value for ~s" S1)))))]))
    I
    δ))
 
@@ -128,8 +142,26 @@
           (empty-scene SCENE-WIDTH SCENE-HEIGHT))))]))
 
 
-(require 2htdp/universe)
 
-(big-bang (list Bool/PDA Bool/min)
-    [to-draw (λ (x) (above (draw-automaton (car x))
-                           (draw-automaton (cadr x))))])
+#;
+(Automaton
+ 'S94981
+ '(F94971 F94980)
+ '(S94970 F94971 S94972 F94973 S94974 F94975 S94976 F94977 S94979 F94980)
+ '((S94981 ε S94970)
+   (S94981 ε S94972)
+   (S94970 O F94971)
+   (S94978 ε S94979)
+   (F94975 ε S94979)
+   (F94977 ε S94979)
+   (F94973 ε S94978)
+   (S94972 I F94973)
+   (F94975 ε S94978)
+   (F94977 ε S94978)
+   (S94978 ε S94974)
+   (S94978 ε S94976)
+   (S94974 O F94975)
+   (S94976 I F94977)
+   (S94979 O F94980))
+ '(I O)
+ '())
