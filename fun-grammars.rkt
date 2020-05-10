@@ -6,6 +6,7 @@
          "queries.rkt"
          "G-to-M.rkt")
 
+(provide (all-defined-out))
 ;;;; stuff to do with number processing
 
 (define number?/RE '(O U (I • ((O U I) *))))

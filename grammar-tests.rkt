@@ -4,6 +4,10 @@
          "G-to-M.rkt"
          "queries.rkt"
          "machines.rkt")
+
+(provide (all-defined-out))
+
+(define test? #f)
 ;; implementations of a few grammars, using
 ;; features from grammars.rkt
 
@@ -40,9 +44,6 @@
     (accept? AUB•c+*/DFA '(a a a a b c b c a b c b c b c b c a b c))
     (not (accept? AUB•c+*/DFA '(a a a a b c b c a b a c b c b c b c a b c)))))
 
-(if (DFA-tests)
-    (displayln "DFA tests passed")
-    (error "DFA tests failed"))
 
 ;; Testing RE->CFG->CNF conversion
 (define A*/CFG (RE->CFG A*))
@@ -99,14 +100,7 @@
   (list A*/CNF A+/CNF AUB/CNF AUB*/CNF AUB+/CNF AUB•c+*/CNF
         AnBn/CNF AnBn2/CNF Bool/SuperSimp/CNF Bool/Simp/CNF Bool/CNF))
 
-(define (CNF-tests)
-  (and (andmap CFG? CNFs)
-       (andmap CNF? CNFs)))
 
-(if (and (CFG-tests)
-         (CNF-tests))
-    (displayln "CFG->CNF conversion tests passed")
-    (error "CFG->CNF conversion tests failed"))
 
 ;;;; some PDAs
 (define A*/PDA (CNF->PDA A*/CNF))
@@ -150,9 +144,6 @@
         (accept? Bool/PDA
                  '(andbegin not orbegin p q andbegin orend p not q not not p andbegin andend andend)))))
 
-(if (PDA-tests)
-    (displayln "PDA tests passed")
-    (error "PDA tests failed"))
 
 ;; testing automata generated from performing set operations on grammars
 
@@ -174,9 +165,6 @@
    (accept? 2Bool/PDA '(not not not p andbegin orbegin orend p q p not orbegin orend andend))
    (not (accept? 2Bool/PDA '(andbegin p andbegin orbegin orend p q p not orbegin orend andend andeng)))))
 
-(if (Set-tests)
-    (displayln "Set operation PDA tests passed")
-    (error "Set tests failed"))
 
 
 
@@ -211,6 +199,28 @@
    (set-equal?? (find-words Bool/Simp/min 4) (find-words Bool/Simp/min 4))
    (set-equal?? (find-words Bool/min 4) (find-words Bool/min 4))))
 
+
+
+(if test?
+    (begin(if (DFA-tests)
+    (displayln "DFA tests passed")
+    (error "DFA tests failed"))
+
+(if (and (CFG-tests)
+         (and (andmap CFG? CNFs)
+       (andmap CNF? CNFs)))
+    (displayln "CFG->CNF conversion tests passed")
+    (error "CFG->CNF conversion tests failed"))
+
+(if (PDA-tests)
+    (displayln "PDA tests passed")
+    (error "PDA tests failed"))
+
+(if (Set-tests)
+    (displayln "Set operation PDA tests passed")
+    (error "Set tests failed"))
+
 (if (Min-tests)
     (displayln "Minimization-tests passed")
-    (error "Minimization tests failed"))
+    (error "Minimization tests failed")))
+    (displayln "all tests skipped"))
