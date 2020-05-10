@@ -8,9 +8,7 @@
          set-equal??
 
          G-Union
-         G-Concatenation
-         G-Difference
-         G-Intersection)
+         G-Concatenation)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammars: REs and CFGs, and how to convert an RE into a CFG
@@ -243,43 +241,23 @@
 
 
 ;;;;;;;;;;;;;;
-;; set operations on grammars
+;; set operations on grammars (incomplete, at the PDA level we do all 4
 
-;; to ensure separate namespaces
-
-(define ((rename-rule ext) e)
-  (match e
-    ['ε 'ε]
-    [`',a `',a]
-    [(? symbol?) (symbol-append e ext)]
-    [`(,es ...) (map (rename-rule ext) es)]))
-
-(define (rename-grammar ext G)
-  (match G
-    ['() '()]
-    [`((,S ->) . ,G)
-     `((,(symbol-append S ext) ->) . ,(rename-grammar ext G))]
-    [`((,S -> ,e ,es ...) . ,G)
-     (match (rename-grammar ext `((,S -> . ,es) . ,G))
-       [`((,S -> ,es ...) . ,G)
-        `((,S -> ,((rename-rule ext) e) . ,es) . ,G)])]))
 
 
 (define (G-Union G1 G2)
-  (let ((G2 (rename-grammar 'b G2))
+  (let ((G2 (rename-xs (map car G2) (λ (x) (symbol-append x 'b)) G2))
         (S0 (gensym 'Start)))
     `((,S0 -> ,(caar G1) ,(caar G2))
       ,@G1
       ,@G2)))
 
 (define (G-Concatenation G1 G2)
-  'TODO)
+  (let ((G2 (rename-xs (map car G2) (λ (x) (symbol-append x 'b)) G2))
+        (S0 (gensym 'Start)))
+    `((,S0 -> (,(caar G1) ,(caar G2)))
+      ,@G1
+      ,@G2)))
 
-
-
-(define G-Intersection
-  'TODO)
-(define G-Difference
-  'TODO)
 
 

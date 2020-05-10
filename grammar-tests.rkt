@@ -2,7 +2,8 @@
 
 (require "grammars.rkt"
          "G-to-M.rkt"
-         "queries.rkt")
+         "queries.rkt"
+         "machines.rkt")
 ;; implementations of a few grammars, using
 ;; features from grammars.rkt
 
@@ -153,4 +154,63 @@
     (displayln "PDA tests passed")
     (error "PDA tests failed"))
 
-(define A*UAnBn (G-Union A*/CFG AnBn))
+;; testing automata generated from performing set operations on grammars
+
+(define A*UAnBn/PDA (CNF->PDA (CFG->CNF (G-Union A*/CFG AnBn))))
+(define A*UA*/PDA (CNF->PDA (CFG->CNF (G-Union A*/CFG A+/CFG))))
+
+(define 2Bool/PDA (CNF->PDA (CFG->CNF (G-Concatenation Bool Bool))))
+
+
+(define (Set-tests)
+  (and
+   (set-equal?? (find-words A*UAnBn/PDA 4)
+                (set-union (find-words A*/PDA 4) (find-words AnBn/PDA 4)))
+   (set-equal?? (find-words A*UA*/PDA 4)
+                (find-words A*/DFA 4))
+   (accept? 2Bool/PDA '(p p))
+   (not (accept? 2Bool/PDA '(orbegin)))
+   (not (accept? 2Bool/PDA '(p)))
+   (accept? 2Bool/PDA '(not not not p andbegin orbegin orend p q p not orbegin orend andend))
+   (not (accept? 2Bool/PDA '(andbegin p andbegin orbegin orend p q p not orbegin orend andend andeng)))))
+
+(if (Set-tests)
+    (displayln "Set operation PDA tests passed")
+    (error "Set tests failed"))
+
+
+
+;; testing minimized automata
+
+(define A*/min (minimize-PDA A*/PDA))
+(define A+/min (minimize-PDA A+/PDA))
+(define AUB/min (minimize-PDA AUB/PDA))
+(define AUB*/min (minimize-PDA AUB*/PDA))
+(define AUB+/min (minimize-PDA AUB+/PDA))
+(define AUB•c+*/min (minimize-PDA AUB•c+*/PDA))
+(define AnBn/min (minimize-PDA AnBn/PDA))
+(define AnBn2/min (minimize-PDA AnBn2/PDA))
+(define DumbBool/min (minimize-PDA DumbBool/PDA))
+(define Bool/SuperSimp/min (minimize-PDA Bool/SuperSimp/PDA))
+(define Bool/Simp/min (minimize-PDA Bool/Simp/PDA))
+(define Bool/min (minimize-PDA Bool/PDA))
+
+
+(define (Min-tests)
+  (and
+   (set-equal?? (find-words A*/min 10) (find-words A*/PDA 10))
+   (set-equal?? (find-words A+/min 10) (find-words A+/PDA 10))
+   (set-equal?? (find-words AUB/min 10) (find-words AUB/PDA 10))
+   (set-equal?? (find-words AUB*/min 4) (find-words AUB*/PDA 4))
+   (set-equal?? (find-words AUB+/min 4) (find-words AUB+/PDA 4))
+   (set-equal?? (find-words AUB•c+*/min 4) (find-words AUB•c+*/min 4))
+   (set-equal?? (find-words AnBn/min 10) (find-words AnBn/min 10))
+   (set-equal?? (find-words AnBn2/min 10) (find-words AnBn2/min 10))
+   (set-equal?? (find-words DumbBool/min 6) (find-words DumbBool/min 6))
+   (set-equal?? (find-words Bool/SuperSimp/min 6) (find-words Bool/SuperSimp/min 6))
+   (set-equal?? (find-words Bool/Simp/min 4) (find-words Bool/Simp/min 4))
+   (set-equal?? (find-words Bool/min 4) (find-words Bool/min 4))))
+
+(if (Min-tests)
+    (displayln "Minimization-tests passed")
+    (error "Minimization tests failed"))

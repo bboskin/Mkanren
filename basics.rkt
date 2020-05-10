@@ -25,7 +25,8 @@
          member-of
 
          ;; variable name management
-         symbol-append)
+         symbol-append
+         rename-xs)
 
 
 
@@ -53,6 +54,16 @@
    (string-append
     (symbol->string s1)
     (symbol->string s2))))
+
+;; to ensure separate namespaces
+
+(define (rename-xs xs ext ls)
+  (cond
+    [(member ls xs) (ext ls)]
+    [(cons? ls)
+     (cons (rename-xs xs ext (car ls))
+           (rename-xs xs ext (cdr ls)))]
+    [else ls]))
 
 ;; Lists
 
