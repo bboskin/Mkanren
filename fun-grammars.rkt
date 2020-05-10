@@ -72,19 +72,19 @@
   '((P -> (Subject VerbPhrase))
     (Subject -> (Adjective* ProperNoun) (Article Adjective* Noun))
     (Adjective* -> ε (Adjective Adjective*))
-    (Adjective -> 'fast 'slow 'big 'small 'beautiful 'sad 'melancholy
-               'green)
-    (ProperNoun -> 'Ben 'Tessa 'Trudi 'Benzo 'Robert 'Google 'God)
-    (Noun -> 'car 'love 'book 'movie 'graph 'city 'country)
+    (Adjective -> 'big 'small 'beautiful 'sad 'melancholy 'green)
+    (ProperNoun -> 'Ben 'Benzo 'Google 'God)
+    (Noun -> 'love 'movie 'graph 'city)
     (VerbPhrase -> Verb (Adverb Verb) (Verb Article Noun))
-    (Adverb -> 'quickly 'fastly 'slowly 'wonderfully 'greasily)
-    (Verb -> 'is 'knows 'runs 'drives 'bakes 'shapes)
-    (Article -> 'an 'the)))
+    (Adverb -> 'fastly 'wonderfully 'greasily)
+    (Verb -> 'is 'knows 'bakes)
+    (Article -> 'the)))
 
 (define Eng/min (minimize-PDA (CNF->PDA (CFG->CNF Eng))))
 
 ;; drawing
 
+#;
 (big-bang Eng/min
     [to-draw draw-automaton])
 

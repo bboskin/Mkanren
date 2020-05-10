@@ -118,7 +118,7 @@
     (match search
       ['dfs (append (foldr set-union '() (map δ L)) ε old)]
       ['bfs (append old ε (foldr set-union '() (map δ L)))]
-      ['shuff (shuffle (append old ε (foldr set-union '() (map δ L))))])))
+      ['shuff (append old (shuffle (append ε (foldr set-union '() (map δ L)))))])))
 
 
 

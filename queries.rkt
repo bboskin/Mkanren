@@ -37,7 +37,7 @@
 
 (define-syntax random-word
   (syntax-rules ()
-    [(_ M k) (find-words M k #f)]
+    [(_ M k) (random-word M k #f)]
     [(_ M k disp?)
      (run
       M
@@ -47,9 +47,9 @@
       (λ (a) #t)
       (list (λ (_ i a) (snoc i a)))
       #f
-      (λ (a _) a)
+      (λ (a A) (if A A (if (<= k (length (car a))) (car a) #f)))
       (λ (Σ _) (shuffle Σ))
-      'dfs
+      'shuff
       disp?)]))
 
 
