@@ -5,7 +5,8 @@
          "basics.rkt"
          "grammar-tests.rkt")
 
-(provide draw-automaton)
+(provide draw-automaton
+         make-PDA-dance)
 
 (define SCENE-HEIGHT 900)
 (define SCENE-WIDTH 960)
@@ -133,3 +134,61 @@
           coords
           δ
           (empty-scene SCENE-WIDTH SCENE-HEIGHT))))]))
+
+
+
+
+;;;;;;;;;;;;;
+;; animation
+
+(require 2htdp/universe)
+
+
+(define (shuffle-one ls k)
+  (cond
+    [(null? ls) '()]
+    [(zero? k) (cons (shuffle (car ls)) (cdr ls))]
+    [else (cons (car ls) (shuffle-one (cdr ls) (sub1 k)))]))
+
+(define (move-one-forward ls k)
+  (cond
+    [(null? ls) '()]
+    [(zero? k)
+     (if (null? (car ls))
+         (move-one-forward (cdr ls) 0)
+         (if (null? (cdr ls))
+             (list* (cdar ls) (list (caar ls)) (cdr ls))
+             (list* (cdar ls) (cons (caar ls) (cadr ls)) (cddr ls))))]
+    [else (cons (car ls) (move-one-forward (cdr ls) (sub1 k)))]))
+
+(define (move-one-back ls k)
+  (cond
+    [(null? ls) '()]
+    [(zero? k)
+     (if (null? (car ls))
+         (move-one-back (cdr ls) 0)
+         (list* (list (caar ls)) (cdar ls) (cdr ls)))]
+    [else (cons (car ls) (move-one-back (cdr ls) (sub1 k)))]))
+
+(define (mutate ls)
+  (match (random 3)
+    [0 (shuffle-one ls (random (length ls)))]
+    [1 (move-one-back ls (random (length ls)))]
+    [2 (move-one-forward ls (random (length ls)))]))
+(define (draw-arrangement S F δ)
+  (λ (cols)
+    (let ((coords (make-coords cols (length cols) 1)))
+      (draw-states
+         S F coords
+         (draw-transitions
+          coords
+          δ
+          (empty-scene SCENE-WIDTH SCENE-HEIGHT))))))
+
+
+(define (make-PDA-dance M)
+  (match M
+    [(Automaton S F A δ Σ Γ)
+     (big-bang (arrange-states S A δ)
+       [on-tick mutate .3]
+       [to-draw (draw-arrangement S F δ)])]))

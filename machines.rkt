@@ -155,4 +155,7 @@
                                       (memv (caddr x) A)))
                           δ)))
            (Automaton S (set-intersection A F) A δ Σ Γ))]))))
+
+
+
  
