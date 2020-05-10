@@ -162,36 +162,31 @@
    '()
    δ))
 
+
 (define-syntax run
   (syntax-rules (display)
-    ((_ M I stop? go? U b f א Π disp?)
+    ((_ M I stop? include? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
-        (let ((T (F0 S Γ I))
-              (update-T (Fk A δ U Π))
+        (let ((update-T (Fk A δ U Π))
               (F? (final-state? F)))
-          (let loop ((T T)
-                     (V '())
-                     (A b))
+          (let loop ((T (F0 S Γ I)) (V '()) (A b))
             (begin
               (if disp? (displayln T) void)
               (match T
                 ['() A]
+                [`(,(? (member-of V)) . ,rest) (loop rest V A)]
                 [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V A)]
                 [`((,s ,ks ,a) . ,rest)
-                 (if (member `(,s ,ks ,a) V)
-                     (loop rest V A)
-                     (let ((T (update-T
-                               rest
-                               (א Σ a)
-                               (apply-transitions U δ s ks a)
-                               (update-epsilons s δ ks a)))
-                           (V `((,s ,ks ,a) . ,V))
-                           (A (if (and (F? s) (all-empty? ks) (go? a))
-                                  (f a A)
-                                  A)))
-                       (loop T V A)))]))))]))
-    ((_ M I stop? go? U b f א)
-     (run M I stop? go? U b f א 'bfs #f))
-    ((_ M I stop? go? U b f א disp?)
-     (run M I stop? go? U b f א 'bfs disp?))))
+                 (let ((V `((,s ,ks ,a) . ,V))
+                       (A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
+                       (T (update-T
+                           rest
+                           (א Σ a)
+                           (apply-transitions U δ s ks a)
+                           (update-epsilons s δ ks a))))
+                   (loop T V A))]))))]))
+    ((_ M I stop? include? U b f א)
+     (run M I stop? include? U b f א 'bfs #f))
+    ((_ M I stop? include? U b f א disp?)
+     (run M I stop? include? U b f א 'bfs disp?))))

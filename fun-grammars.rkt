@@ -1,6 +1,7 @@
 #lang racket
 
 (require "grammars.rkt"
+         "machines.rkt"
          "basics.rkt"
          "queries.rkt"
          "G-to-M.rkt")
@@ -33,6 +34,11 @@
 > (length (Automaton-transition-function Val-of))
 262
 
+;; AFTER PDA minimization efforts
+> (length (Automaton-all-states (minimize-PDA Val-of)))
+43
+(length (Automaton-transition-function (minimize-PDA Val-of)))
+194
 |#
 
 
@@ -55,6 +61,7 @@
     (Value* -> ε (Value Value*))))
 
 (define Val-of (CNF->PDA (CFG->CNF val-of)))
+(define Val-of/min (minimize-PDA Val-of))
 
 
 

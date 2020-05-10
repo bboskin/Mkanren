@@ -27,14 +27,9 @@
       '(())
       (λ (a) (> (length (car a)) k))
       (λ (a) #t)
-      (list (λ (_ i a) (cons i a)))
+      (list (λ (_ i a) (snoc i a)))
       '()
-      (λ (a A)
-        (let ((w (reverse (car a))))
-          (set-cons w A)
-          #;(if (member w ans)
-              ans
-              (cons w ans))))
+      (λ (a A) (set-cons (car a) A))
       (λ (Σ _) Σ)
       disp?)]))
 
