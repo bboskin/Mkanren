@@ -2,7 +2,7 @@
 
 (require "basics.rkt")
 
-(provide  find-words accept?)
+(provide find-words accept? random-word)
 
 (define-syntax accept?
   (syntax-rules ()
@@ -11,6 +11,7 @@
      (run M
           `(,w)
           (λ (_) #f)
+          (λ (e) e)
           (λ (a) (null? (car a)))
           (list (λ (_1 _2 acc) (cdr acc)))
           #f
@@ -26,11 +27,29 @@
       M
       '(())
       (λ (a) (> (length (car a)) k))
+      (λ (x) #f)
       (λ (a) #t)
       (list (λ (_ i a) (snoc i a)))
       '()
       (λ (a A) (set-cons (car a) A))
       (λ (Σ _) Σ)
+      disp?)]))
+
+(define-syntax random-word
+  (syntax-rules ()
+    [(_ M k) (find-words M k #f)]
+    [(_ M k disp?)
+     (run
+      M
+      '(())
+      (λ (a) #f)
+      (λ (x) x)
+      (λ (a) #t)
+      (list (λ (_ i a) (snoc i a)))
+      #f
+      (λ (a _) a)
+      (λ (Σ _) (shuffle Σ))
+      'dfs
       disp?)]))
 
 

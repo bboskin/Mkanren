@@ -117,7 +117,8 @@
   (λ (old L δ ε)
     (match search
       ['dfs (append (foldr set-union '() (map δ L)) ε old)]
-      ['bfs (append old ε (foldr set-union '() (map δ L)))])))
+      ['bfs (append old ε (foldr set-union '() (map δ L)))]
+      ['shuff (shuffle (append old ε (foldr set-union '() (map δ L))))])))
 
 
 
@@ -165,7 +166,7 @@
 
 (define-syntax run
   (syntax-rules (display)
-    ((_ M I stop? include? U b f א Π disp?)
+    ((_ M I stop? A-stop? include? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
         (let ((update-T (Fk A δ U Π))
@@ -175,6 +176,7 @@
               (if disp? (displayln T) void)
               (match T
                 ['() A]
+                [(? (λ (x) (A-stop? A))) A]
                 [`(,(? (member-of V)) . ,rest) (loop rest V A)]
                 [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V A)]
                 [`((,s ,ks ,a) . ,rest)
@@ -186,7 +188,7 @@
                            (apply-transitions U δ s ks a)
                            (update-epsilons s δ ks a))))
                    (loop T V A))]))))]))
-    ((_ M I stop? include? U b f א)
-     (run M I stop? include? U b f א 'bfs #f))
-    ((_ M I stop? include? U b f א disp?)
-     (run M I stop? include? U b f א 'bfs disp?))))
+    ((_ M I stop? A-stop? include? U b f א)
+     (run M I stop? A-stop? include? U b f א 'bfs #f))
+    ((_ M I stop? A-stop? include? U b f א disp?)
+     (run M I stop? A-stop? include? U b f א 'bfs disp?))))

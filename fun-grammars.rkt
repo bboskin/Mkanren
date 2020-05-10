@@ -5,7 +5,8 @@
          "basics.rkt"
          "queries.rkt"
          "G-to-M.rkt"
-         "draw-automata.rkt")
+         "draw-automata.rkt"
+         2htdp/universe)
 
 (provide (all-defined-out))
 ;;;; stuff to do with number processing
@@ -21,7 +22,7 @@
 ;; stuff to do with boolean logic
 
 #|
-
+;; keeping track of minimization progress
 
 ;; PRE any minimization efforts
 > (length (Automaton-all-states Val-of))
@@ -65,11 +66,26 @@
 (define Val-of (CNF->PDA (CFG->CNF val-of)))
 (define Val-of/min (minimize-PDA Val-of))
 
-;; drawing them
-(require 2htdp/universe)
 
 
-(big-bang even?/DFA
+(define Eng
+  '((P -> (Subject VerbPhrase))
+    (Subject -> (Adjective* ProperNoun) (Article Adjective* Noun))
+    (Adjective* -> ε (Adjective Adjective*))
+    (Adjective -> 'fast 'slow 'big 'small 'beautiful 'sad 'melancholy
+               'green)
+    (ProperNoun -> 'Ben 'Tessa 'Trudi 'Benzo 'Robert 'Google 'God)
+    (Noun -> 'car 'love 'book 'movie 'graph 'city 'country)
+    (VerbPhrase -> Verb (Adverb Verb) (Verb Article Noun))
+    (Adverb -> 'quickly 'fastly 'slowly 'wonderfully 'greasily)
+    (Verb -> 'is 'knows 'runs 'drives 'bakes 'shapes)
+    (Article -> 'an 'the)))
+
+(define Eng/min (minimize-PDA (CNF->PDA (CFG->CNF Eng))))
+
+;; drawing
+
+(big-bang Eng/min
     [to-draw draw-automaton])
 
 

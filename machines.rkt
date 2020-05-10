@@ -155,27 +155,4 @@
                                       (memv (caddr x) A)))
                           δ)))
            (Automaton S (set-intersection A F) A δ Σ Γ))]))))
-
-
-
-#|
-
-(minimize-PDA (Automaton
- 'S2504
- '(S2504F)
- '(S2504 S2504F S25042505 S25042505F S SF)
- '((S a SF preserve-stack)
-   (S ε S25042505 (pop on #t push (γ2625)))
-   (S25042505F ε S (pop on γ2625 push (γ2625)))
-   (SF ε SF (pop on γ2625 push ()))
-   (S25042505 a S25042505F preserve-stack)
-   (S2504 a S2504F preserve-stack)
-   (S2504 ε S25042505 (pop on #t push (γ2624)))
-   (S25042505F ε S (pop on γ2624 push (γ2624)))
-   (SF ε S2504F (pop on γ2624 push ()))
-   (S2504 ε S2504F preserve-stack))
- '(a)
- '((γ2625 γ2624))))
-((S2504F))
-(S2504F)
-|#
+ 
