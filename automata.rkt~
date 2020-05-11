@@ -2,6 +2,7 @@
 
 (require "basics.rkt")
 
+#|
 (provide M-Union
          M-Concatenation
          M-Intersection
@@ -73,7 +74,7 @@
      'TODO]))
 
 (define (make-circumstances Σ Γ)
-  (foldr (λ (γ a) (append (cartesian-product Σ γ) a)) '() Γ))
+  (foldr (λ (γ a) (append (cartesian-product Σ (cons #f γ)) a)) '() Γ))
 
 
 
@@ -89,7 +90,6 @@
          (λ (x a)
            (if (eqv? (car x) S)
                (set-union
-                a
                 (match (cdr x)
                   [`(ε ,S2 preserve-stack)
                    `(,(lookup-group S2 gs 0))]
@@ -103,7 +103,8 @@
                   [`(,a ,S2 (pop on #t push ,vs))
                    (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
                   [`(,a ,S2 (pop on ,g push ,vs))
-                   (if (and (eqv? a s) (eqv? g γ)) `(,(lookup-group S2 gs 0)) '())]))
+                   (if (and (eqv? a s) (eqv? g γ)) `(,(lookup-group S2 gs 0)) '())])
+                a)
                a))
            '()
            δ)))
@@ -142,8 +143,11 @@
          (match C
            ['() groups]
            [`((,s1 ,γ1) . ,C)
-            (let ((groups (update-by-dest groups s1 γ1 δ)))
-              (loop groups C))])))]))
+            (loop (update-by-dest groups s1 γ1 δ) C)])))]))
+
+
+(define (get-representative S groups)
+  (caar (filter (λ (x) (member S x)) groups)))
 
 (define (minimize-PDA M)
   (let ((groups (get-state-groups M)))
@@ -151,11 +155,27 @@
       (match M
         [(Automaton S F A-old δ Σ Γ)
          (let ((F (set-intersection A F))
-               (δ (filter (λ (x) (and (memv (car x) A)
-                                      (memv (caddr x) A)))
-                          δ)))
+               (δ (foldr (λ (x a)
+                           (match x
+                             [`(,s1 ε ,s2 preserve-stack)
+                              (let ((s1 (get-representative s1 groups))
+                                    (s2 (get-representative s2 groups)))
+                              (if (eqv? s1 s2)
+                                  a
+                                  (set-cons
+                                   `(,s1 ε ,s2 preserve-stack)
+                                   a)))]
+                             [`(,s1 ,s ,s2 . ,r)
+                              (set-cons
+                               `(,(get-representative s1 groups)
+                                 ,s
+                                 ,(get-representative s2 groups)
+                                 . ,r)
+                               a)]))
+                         '()
+                         δ)))
            (Automaton S (set-intersection A F) A δ Σ Γ))]))))
 
 
-
+|#
  

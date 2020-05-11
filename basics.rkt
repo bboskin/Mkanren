@@ -116,9 +116,9 @@
 (define (Fk A δ U search)
   (λ (old L δ ε)
     (match search
-      ['dfs (append (foldr set-union '() (map δ L)) ε old)]
-      ['bfs (append old ε (foldr set-union '() (map δ L)))]
-      ['shuff (append old (shuffle (append ε (foldr set-union '() (map δ L)))))])))
+      ['dfs (append (foldr append '() (map δ L)) ε old)]
+      ['bfs (append old ε (foldr append '() (map δ L)))]
+      ['shuff (append old (shuffle (append ε (foldr append '() (map δ L)))))])))
 
 
 
@@ -165,7 +165,7 @@
 
 
 (define-syntax run
-  (syntax-rules (display)
+  (syntax-rules ()
     ((_ M I stop? A-stop? include? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)

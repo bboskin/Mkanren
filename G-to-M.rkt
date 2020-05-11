@@ -1,9 +1,7 @@
 #lang racket
 
-(require "basics.rkt"
-         "grammars.rkt")
-(provide RE->DFA CNF->PDA
-         )
+(require "basics.rkt")
+(provide RE->DFA CNF->PDA)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Automated generation of abstract machines from grammars
@@ -11,12 +9,12 @@
 
 ;; making DFAs (actually NFAs) from REs
 (define (RE->DFA e)
-  (match e
+ (match e
     [(? symbol? x)
      (let ((S (gensym 'S))
            (F (gensym 'F)))
        (Automaton S `(,F) `(,S ,F) `((,S ,x ,F)) `(,x) '()))]
-    [`(,(? RE? e1) • ,(? RE? e2))
+    [`(,e1 • ,e2)
      (match* ((RE->DFA e1) (RE->DFA e2))
        [((Automaton S1 F1 A1 δ1 Σ1 _) (Automaton S2 F2 A2 δ2 Σ2 _))
         (Automaton
@@ -24,7 +22,7 @@
          (set-union (map (λ (F) `(,F ε ,S2)) F1) (set-union δ1 δ2))
          (set-union Σ1 Σ2)
          '())])]
-    [`(,(? RE? e1) U ,(? RE? e2))
+    [`(,e1 U ,e2)
      (match* ((RE->DFA e1) (RE->DFA e2))
        [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
          (Automaton S2 F2 A2 δ2 Σ2 Γ2))
@@ -34,7 +32,7 @@
            (append `((,new-S ε ,S1) (,new-S ε ,S2)) (set-union δ1 δ2))
            (set-union Σ1 Σ2)
            '()))])]
-    [`(,(? RE? e1) +)
+    [`(,e1 +)
      (match (RE->DFA e1)
        [(Automaton S1 F1 A1 δ1 Σ1 Γ1)
         (Automaton
@@ -42,7 +40,7 @@
          (append (map (λ (x) `(,x ε ,S1)) F1) δ1)
          Σ1
          '())])]
-    [`(,(? RE? e1) *)
+    [`(,e1 *)
      (match (RE->DFA e1)
        [(Automaton S1 F1 A1 δ1 Σ1 Γ1)
         (Automaton

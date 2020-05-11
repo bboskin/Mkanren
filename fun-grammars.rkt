@@ -85,9 +85,10 @@
 
 #;
 (big-bang Eng/min
-    [to-draw draw-automaton])
+  [to-draw draw-automaton])
 
 ;; there's a bug somewhere, unminimized version is right
+#;
 (equal?
  (accept?
   Val-of/min

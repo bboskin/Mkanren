@@ -22,10 +22,6 @@
     [`(,(? RE?) *) #t]
     [else #f]))
 
-;; the first symbol of the first line is taken to be the start symbol.
-
-
-
 (define (terminal? x)
   (match x
     [`',(? symbol? x) #t]
