@@ -1,7 +1,7 @@
 #lang racket
 
 
-(require 2htdp/image "basics.rkt")
+(require 2htdp/image "basics.rkt" "examples.rkt")
 
 (provide draw-automaton
          make-PDA-dance)
@@ -13,6 +13,10 @@
 (define STATE-SIZE 20)
 (define FONT-SIZE 12)
 
+
+(define TEXT-COLOR "black")
+(define Δ-FONT-SIZE 8)
+(define Δ-raise 10)
 (define (draw-start-state S)
   (overlay (circle STATE-SIZE "outline" "red")
            (circle STATE-SIZE "solid" "white")))
@@ -34,18 +38,23 @@
    (circle STATE-SIZE "solid" "white")))
 
 
-(define (draw-transition from to I)
-  (if (equal? from to)
-      (place-image/align
-       (ellipse 40 50 "outline" "black")
-        (car from)(cadr from) "center" 
-        "bottom"
-        I)
-      (add-line
-       I
-       (car from) (cadr from)
-       (car to) (cadr to)
-       "black")))
+(define (format-transition x)
+  (match x
+    [`(,S1 ,a ,S2) (symbol->string a)]
+    [`(,S1 ,a ,S2 preserve-stack) (symbol->string a)]
+    [`(,S1 #t ,S2 (pop on ,b push ,vs))
+     (format-transition `(,S1 Σ ,S2 (pop on ,b push ,vs)))]
+    [`(,S1 ,a ,S2 (pop on #t push ,vs))
+     (format-transition `(,S1 Σ ,S2 (pop on Γ push ,vs)))]
+    [`(,S1 ,a ,S2 (pop on ,b push ()))
+     (string-append (symbol->string a) "/ pop on " (symbol->string b))]
+    [`(,S1 ,a ,S2 (pop on ,b push ,vs))
+     (string-append
+      (symbol->string a)
+      "/"
+      (symbol->string b)
+      "->"
+      (symbol->string (foldl (λ (x a) (symbol-append a x)) (car vs) (cdr vs))))]))
 
 
 (define (reachable-from δ l)
@@ -106,22 +115,53 @@
    I
    coords))
 
-(define (draw-transitions coords δ I)
-  (foldr
-   (λ (x a)
-     (match x
-       [`(,S1 ,on ,S2 . ,rs)
-        (let ((c1 (assv S1 coords))
-              (c2 (assv S2 coords)))
-          (if (and c1 c2)
-              (draw-transition (cdr c1) (cdr c2) a)
-              (if c1
-                  (error (format "no value for ~s" S2))
-                  (error (format "no value for ~s" S1)))))]))
-   I
-   δ))
 
-(define (draw-automaton M)
+(define (make-label es)
+  (foldr
+   (λ (x a) (above (text (format-transition x) Δ-FONT-SIZE TEXT-COLOR) a))
+   empty-image
+   es))
+
+(define (draw-transition c1 c2 I δ? es)
+  (let* ((mid-x (/ (+ (car c1) (car c2)) 2))
+         (mid-y (/ (+ (cadr c1) (cadr c2)) 2))
+         (hyp (sqrt (+ (sqr (- (car c1) (car c2)))
+                       (sqr (- (cadr c1) (cadr c2))))))
+         (opp (abs (- (cadr c1) (cadr c2))))
+         (θ (if (zero? hyp) 0 (asin (/ opp hyp)))))
+    (place-image
+       (make-label es)
+       mid-x mid-y
+       (if (< (car c1) (car c2))
+           (scene+curve I
+                        (car c1) (cadr c1) 30 1/3
+                        (car c2) (cadr c2) -30 1/3
+                        "black")
+           (scene+curve I
+                        (car c1) (cadr c1) -60 1/4
+                        (car c2) (cadr c2) 60 1/4
+                        "red")))))
+
+(define (draw-transitions δ? coords δ I)
+  (let loop ((δ δ)
+             (I I))
+    (cond
+      [(null? δ) I]
+      [else
+       (let* ((s1 (caar δ))
+              (s2 (caddar δ))
+              (es (filter (λ (x) (and (eqv? (car x) s1) (eqv? (caddr x) s2)))
+                          δ))
+              (δ (filter (λ (x) (or (not (eqv? (car x) s1))
+                                    (not (eqv? (caddr x) s2))))
+                         δ)))
+         (let ((c1 (cdr (assv s1 coords)))
+               (c2 (cdr (assv s2 coords))))
+           (loop δ (draw-transition c1 c2 I δ? es))))])))
+
+
+
+(define ((draw-automaton δ?) M)
   (match M
     [(Automaton S F A δ Σ Γ)
      (let* ((cols (arrange-states S A δ))
@@ -129,11 +169,16 @@
        (draw-states
          S F coords
          (draw-transitions
+          δ?
           coords
           δ
           (empty-scene SCENE-WIDTH SCENE-HEIGHT))))]))
 
-
+(define-syntax draw-in-window
+  (syntax-rules ()
+    [(_ e δ?)
+     (big-bang e
+       [to-draw (draw-automaton δ?)])]))
 
 
 ;;;;;;;;;;;;;
@@ -180,6 +225,7 @@
       (draw-states
          S F coords
          (draw-transitions
+          #f
           coords
           δ
           (empty-scene SCENE-WIDTH SCENE-HEIGHT))))))
@@ -191,3 +237,4 @@
      (big-bang (arrange-states S A δ)
        [on-tick mutate .3]
        [to-draw (draw-arrangement S F δ)])]))
+

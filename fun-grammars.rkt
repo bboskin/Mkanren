@@ -1,7 +1,7 @@
 #lang racket
 
 (require "grammars.rkt"
-         "machines.rkt"
+         "automata.rkt"
          "basics.rkt"
          "queries.rkt"
          "G-to-M.rkt"
@@ -79,25 +79,7 @@
     (Verb -> 'is 'knows 'bakes)
     (Article -> 'the)))
 
+(define Eng/PDA (CNF->PDA (CFG->CNF Eng)))
 (define Eng/min (minimize-PDA (CNF->PDA (CFG->CNF Eng))))
-
-;; drawing
-
-#;
-(big-bang Eng/min
-  [to-draw draw-automaton])
-
-;; there's a bug somewhere, unminimized version is right
-#;
-(equal?
- (accept?
-  Val-of/min
-  '(andbegin not not t not orbegin f  not andbegin andend orend andend))
- (accept?
-  Val-of
-  '(andbegin not not t not orbegin f  not andbegin andend orend andend)))
-
-
-
 
 
