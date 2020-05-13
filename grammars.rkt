@@ -4,9 +4,7 @@
 
 (provide RE? CFG? CNF?
          RE->CFG CFG->CNF
-         minimize-CNF
          set-equal??
-
          G-Union
          G-Concatenation)
 
@@ -191,27 +189,15 @@
     [else (error 'CFG->CNF (format "invalid rule: ~s" (car G)))]))
 
 (define (CFG->CNF G)
-  (if (null? G)
-      (error "No null grammars")
+  (if (not (CFG? G))
+      (error (format "Not a valid grammars: ~s" G))
       (let* ((S0 (caar G))
              (new-S0 (gensym S0))
              (G (remove-epsilons new-S0 `((,new-S0 -> ,S0) ,@G) '())))
-        (minimize-CNF (CNF->CNF* G '() '() #f)))))
+        (consolidate-CNF (CNF->CNF* G '() '() #f)))))
 
 
-
-;;;;;;;;;;;;;;;;;
-;; minimizing CNF
-
-(define (replace* old new x)
-  (cond
-    [(equal? x old) new]
-    [(cons? x)
-     (cons (replace* old new (car x))
-           (replace* old new (cdr x)))]
-    [else x]))
-
-(define (minimize-CNF-help S es G)
+(define (consolidate-CNF-help S es G)
   (let loop ((G G)
              (acc '()))
     (match G
@@ -221,14 +207,14 @@
            (replace* P S (append acc G))
            (loop G `(,@acc (,P -> . ,es2))))])))
 
-(define (minimize-CNF G)
+(define (consolidate-CNF G)
   (let loop ((G G)
              (acc '()))
     (match G
       ['() acc]
       [`((,S -> . ,es) . ,G)
        (cond
-         [(minimize-CNF-help S es (append acc (cons `(,S -> . ,es) G)))
+         [(consolidate-CNF-help S es (append acc (cons `(,S -> . ,es) G)))
           => (λ (G) (loop G '()))]
          [else (loop G `(,@acc (,S -> . ,es)))])])))
 

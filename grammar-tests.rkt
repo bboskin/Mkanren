@@ -4,7 +4,7 @@
          "queries.rkt"
          "examples.rkt")
 
-(define test? #f)
+(define test? #t)
 ;; implementations of a few grammars, using
 ;; features from grammars.rkt
 

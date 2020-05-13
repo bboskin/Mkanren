@@ -73,6 +73,14 @@
       (Automaton S2 F2 A2 δ2 Σ2 Γ2))
      'TODO]))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; two-phase PDA minimization
+
+(define (rep S groups)
+  (caar (filter (λ (x) (member S x)) groups)))
+
+
 (define (make-circumstances Σ Γ)
   (foldr
    (λ (γ a) (append (cartesian-product Σ γ) a))
@@ -80,8 +88,6 @@
    (if (null? Γ)
        '((#f))
        (map (λ (x) (cons #f x)) Γ))))
-
-
 
 (define (lookup-group s gs k)
   (cond
@@ -135,11 +141,10 @@
 
 (define (update-by-dest init-groups s γ δ)
   (let ((F (find-dest s γ δ init-groups)))
-    (let loop ((groups init-groups))
-      (match groups
-        ['() '()]
-        [`(,g1 . ,g)
-         (append (update-group g1 (map F g1)) (loop g))]))))
+    (foldr (λ (g1 a)
+             (append (update-group g1 (map F g1)) a))
+           '()
+           init-groups)))
 
 
 
@@ -156,33 +161,80 @@
             (loop (update-by-dest groups s1 γ1 δ) C)])))]))
 
 
-(define (get-representative S groups)
-  (caar (filter (λ (x) (member S x)) groups)))
+(define (update-δ groups δ)
+  (foldr
+   (λ (x a)
+     (match x
+       [`(,s1 ε ,s2 preserve-stack)
+        (let ((s1 (rep s1 groups)) (s2 (rep s2 groups)))
+          (if (eqv? s1 s2) a
+              (set-cons `(,s1 ε ,s2 preserve-stack) a)))]
+       [`(,s1 ,s ,s2 . ,r)
+        (set-cons `(,(rep s1 groups) ,s ,(rep s2 groups) . ,r) a)]))
+   '()
+   δ))
+
+(define (add-to-group s L groups)
+  (match groups
+    ['() `((,s ,L (,s)))]
+    [`((,rep ,L-g ,g) . ,groups)
+     (if (set-equal?? L-g (replace* s rep L))
+         `((,rep ,L-g (cons s g)) . ,groups)
+         `((,rep ,L-g ,g) . ,(add-to-group s L groups)))]))
+
+(define (get-stack-groups M)
+  (match M
+    [(Automaton S F A δ Σ '()) #f]
+    [(Automaton S F A δ Σ `(,Γ))
+     (let ((asoclist (map (λ (x) (cons x (filter (λ (r) (member* x r)) δ))) Γ)))
+       (let loop ((symbols Γ)
+                  (groups '()))
+         (match symbols
+           ['() groups]
+           [`(,s1 . ,symbols)
+            (let ((L (cdr (assv s1 asoclist))))
+              (loop symbols
+                    (add-to-group s1 L groups)))])))]
+    [else (error "not handling multiple stacks yet")]))
+
+(define ((stack-rep groups) S)
+  (caar (filter (λ (x) (member S (caddr x))) groups)))
+
+(define (update-stack groups δ)
+  (if (false? groups)
+      (values #f δ)
+      (values (map car groups)
+          (foldr
+           (λ (r a)
+             (match r
+               [`(,S1 ,s ,S2) (cons r a)]
+               [`(,S1 ,s ,S2 preserve-stack) (cons r a)]
+               [`(,S1 ,s ,S2 (pop on #t push ,vs))
+                (set-cons
+                 `(,S1 ,s ,S2 (pop on #t push ,(map (stack-rep groups) vs)))
+                 a)]
+               [`(,S1 ,s ,S2 (pop on ,b push ,vs))
+                (set-cons
+                 `(,S1 ,s ,S2 (pop on ,((stack-rep groups) b) push ,(map (stack-rep groups) vs)))
+                 a)]))
+           '()
+           δ))))
+
+(define (minimize-states M)
+  (match M
+    [(Automaton S F _ δ Σ Γ)
+     (let* ((groups (get-state-groups M))
+            (A (map car groups))
+            (F (set-intersection A F))
+            (δ (update-δ groups δ)))
+       (Automaton S (set-intersection A F) A δ Σ Γ))]))
+
+(define (minimize-stack M)
+  (match M
+    [(Automaton S F A δ Σ Γ)
+     (let-values (((Γ δ) (update-stack (get-stack-groups M) δ)))
+       (Automaton S F A δ Σ (if Γ `(,Γ) '())))]))
 
 (define (minimize-PDA M)
-  (let ((groups (get-state-groups M)))
-    (let ((A (map car groups)))
-      (match M
-        [(Automaton S F A-old δ Σ Γ)
-         (let ((F (set-intersection A F))
-               (δ (foldr (λ (x a)
-                           (match x
-                             [`(,s1 ε ,s2 preserve-stack)
-                              (let ((s1 (get-representative s1 groups))
-                                    (s2 (get-representative s2 groups)))
-                              (if (eqv? s1 s2)
-                                  a
-                                  (set-cons
-                                   `(,s1 ε ,s2 preserve-stack)
-                                   a)))]
-                             [`(,s1 ,s ,s2 . ,r)
-                              (set-cons
-                               `(,(get-representative s1 groups)
-                                 ,s
-                                 ,(get-representative s2 groups)
-                                 . ,r)
-                               a)]))
-                         '()
-                         δ)))
-           (Automaton S (set-intersection A F) A δ Σ Γ))]))))
- 
+  (minimize-stack (minimize-states M)))
+

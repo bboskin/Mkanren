@@ -23,6 +23,9 @@
          ;; list basics
          snoc
          member-of
+         replace*
+         member*
+         
 
          ;; variable name management
          symbol-append
@@ -69,6 +72,20 @@
 
 (define (snoc x s) (foldr cons `(,x) s))
 (define (member-of s) (λ (x) (member x s)))
+
+(define (replace* old new x)
+  (cond
+    [(equal? x old) new]
+    [(cons? x)
+     (cons (replace* old new (car x))
+           (replace* old new (cdr x)))]
+    [else x]))
+
+(define (member* x l)
+  (or (equal? x l)
+      (and (cons? l)
+           (or (member* x (car l))
+               (member* x (cdr l))))))
 
 ;; Sets
 (define (set-cons x s) (if (member x s) s (cons x s)))
