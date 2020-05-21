@@ -12,27 +12,32 @@
          
          run
 
-         ;; set basics
+         ;; basic basics
+         id
+         
          set-cons
          set-union
          set-difference
          set-intersection
-
          set-equal??
+         to-set
 
-         ;; list basics
          snoc
          member-of
          replace*
          member*
-
-         ;; stack function used in M-Intersection
-         all-empty?
-         
+         powerset
 
          ;; variable name management
          symbol-append
-         rename-xs)
+         rename-xs
+
+
+         ;; THE REST ARE FUNCTIONS TO hide again
+         ;; stack function used in M-Intersection
+         all-empty?
+         check-stacks
+         )
 
 
 
@@ -90,6 +95,16 @@
            (or (member* x (car l))
                (member* x (cdr l))))))
 
+(define (powerset l)
+  (foldr
+   (λ (x P)
+    (foldr
+     (λ (l a) (append `((,x . ,l) ,l) a))
+     '()
+     P))
+   '(())
+   l))
+
 ;; Sets
 (define (set-cons x s) (if (member x s) s (cons x s)))
 (define (set-union s1 s2) (foldr set-cons s2 s1))
@@ -98,7 +113,8 @@
 (define (set-equal?? s1 s2)
   (and (andmap (λ (x) (member x s2)) s1)
        (andmap (λ (x) (member x s1)) s2)))
-
+(define (to-set ls)
+  (foldr set-cons '() ls))
 ;; Stacks 
 (define (stack-empty? k) (equal? k '(#f)))
 (define (all-empty? ks) (andmap stack-empty? ks))
@@ -133,7 +149,7 @@
 ;; initializing/updating the frontier
 (define (F0 S Γ I) `((,S ,(build-list (length Γ) (λ (_) '(#f))) ,I)))
 
-(define (Fk A δ U search)
+(define (Fk A search)
   (λ (old L δ ε)
     (match search
       ['dfs (append (foldr append '() (map δ L)) ε old)]
@@ -189,7 +205,7 @@
     ((_ M I stop? A-stop? include? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
-        (let ((update-T (Fk A δ U Π))
+        (let ((update-T (Fk A Π))
               (F? (final-state? F)))
           (let loop ((T (F0 S Γ I)) (V '()) (A b))
             (begin
@@ -199,11 +215,11 @@
                 [(? (λ (x) (A-stop? A))) A]
                 [`(,(? (member-of V)) . ,rest) (loop rest V A)]
                 [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V A)]
-                [`((,s ,ks ,a) . ,rest)
+                [`((,s ,ks ,a) . ,r)
                  (let ((V `((,s ,ks ,a) . ,V))
                        (A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
                        (T (update-T
-                           rest
+                           r
                            (א Σ a)
                            (apply-transitions U δ s ks a)
                            (update-epsilons s δ ks a))))

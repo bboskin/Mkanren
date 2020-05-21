@@ -66,48 +66,142 @@
 ;; Helper functions for Intersection
 ;; (which for now assumes separate namespaces for the two input machines
 
+#|
+We add powerstates to δ.
 
-(define (state-cart-prod A1 A2)
-  (foldr (λ (a v) (append (map (λ (x) `(,a ,x)) A2)  v))
-         '()
-         A1)
-  (match A1
-    ['() (map list A2)]
-    [`(,a . ,d)
-     (map
-      (λ (x)
-        `(,(symbol-append a (car x)) ,a . ,(cdr x)))
-      (state-cart-prod d A2))]))
+The powerstate <(S1 ...) a k?> is a state that can be transitioned
+to on a with k?,
+and epsilon transitions to S1 ... on all stack configurations.
+
+Powerstates do not point to powerstates.
+
+We can transition from a non-powerstate to a powerstate when on the agreeing
+input symbols
+
+|#
+
+
+
+
+(define (add-stacks-right δ k)
+  (let ((v (build-list k (λ (_) 'preserve-stack))))
+    (map (λ (x) (append x v)) δ)))
+
+(define (add-stacks-left δ k)
+  (let ((v (build-list k (λ (_) 'preserve-stack))))
+    (map (λ (x)
+           (match x
+             [`(,S1 ,c ,S2 . ,s)
+              `(,S1 ,c ,S2 ,@v . ,s)]))
+         δ)))
+
+(define (make-var-names A)
+  (cond
+    [(null? A) (λ (x) x)]
+    [(symbol? (car A)) (make-var-names (cdr A))]
+    [else (let ((g (gensym 'COMP))
+                (res (make-var-names (cdr A))))
+            (λ (x) (if (and (list? x) (set-equal?? (car A) x)) g (res x))))]))
+
+(define (merge s1 s2)
+  (match* (s1 s2)
+    [((? symbol?) (? symbol?)) (if (eqv? s1 s2) s2  `(,s1 ,s2))]
+    [((? list?) (? symbol?)) (set-cons s2 s1)]
+    [((? symbol?) (? list?)) (set-cons s1 s2)]
+    [((? list?) (? list?)) (set-union s1 s2)]))
+
+
+(define (stacks-mutually-occur? ks1 ks2)
+  (match* (ks1 ks2)
+    [('() '()) '()]
+    [(`(preserve-stack . ,ks1) `(,k2 . ,ks2))
+     (cons k2 (stacks-mutually-occur? ks1 ks2))]
+    [(`(,k1 . ,ks1) `(preserve-stack . ,ks2))
+     (cons k1 (stacks-mutually-occur? ks1 ks2))]
+    [(`((pop on ,c1 push ,vs1) . ,ks1)
+      `((pop on ,c2 push ,vs2) . ,ks2))
+     (if (not (equal? vs1 vs2)) #f
+         (cond
+           [(eqv? c1 #t) (cons `(pop on ,c2 push ,vs1) (stacks-mutually-occur? ks1 ks2))]
+           [(eqv? c2 #t) (cons `(pop on ,c1 push ,vs1) (stacks-mutually-occur? ks1 ks2))]
+           [(eqv? c1 c2) (cons `(pop on ,c2 push ,vs1) (stacks-mutually-occur? ks1 ks2))]
+           [else #f]))]
+    [(_ _) #f]))
+
+(define (find-rules c δ)
+  (match c
+    [`(,s1 ,s2)
+     (let ((s1-rel (filter (λ (x) (eqv? (car x) s1)) δ))
+           (s2-rel (filter (λ (x) (eqv? (car x) s2)) δ)))
+       (let ((options (cartesian-product s1-rel s2-rel)))
+         (let loop ((ls options))
+         (match ls
+           ['() '()]
+           [`(((,from1 ,on1 ,to1 . ,stck1)
+               (,from2 ,on2 ,to2 . ,stck2))
+               . ,ls)
+            (let ((s? (and (eqv? on1 on2)
+                           (stacks-mutually-occur? stck1 stck2))))
+              (if s?
+                  (cons `((,s1 ,s2) ,on1 ,(merge to1 to2) . ,s?) (loop ls))
+                  (loop ls)))]))))]))
+
+
+#;(define (find-rules c δ)
+  (match c
+    [`(,s1 ,s2)
+     (let ((s1-rel (filter (λ (x) (eqv? (car x) s1)) δ))
+           (s2-rel (filter (λ (x) (eqv? (car x) s2)) δ)))
+       (let loop ((ls (append s1-rel s2-rel)))
+         (match ls
+           ['() '()]
+           [`((,from ,on ,to . ,stck) . ,ls)
+            (let ((v (loop ls)))
+              (let loop ((v v))
+                (match v
+                  ['() `(((,s1 ,s2) ,on ,to . ,stck))]
+                  [`((,f ,c ,t . ,stck2) . ,v)
+                   (let ((s? (and (eqv? on c)
+                                  (stacks-mutually-occur? stck stck2))))
+                     (if s?
+                         (cons `(,f ,c ,(merge to t) . ,s?) v)
+                         (cons `(,f ,c ,t . ,stck2) (loop v))))])))])))]))
+
+(define (give-names A)
+  (match A
+    [(Automaton S F A δ Σ Γ)
+     (let* ((get-name (make-var-names A))
+            (S (get-name S))
+            (F (map get-name F))
+            (A (map get-name A))
+            (δ (map (λ (x)
+                      (match x
+                        [`(,S1 ,c ,S2 . ,r)
+                         `(,(get-name S1) ,c ,(get-name S2) . ,r)]))
+                    δ)))
+       (Automaton S F A δ Σ Γ))]))
 
 (define (M-Intersection M1 M2)
   (match* (M1 M2)
     [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
       (Automaton S2 F2 A2 δ2 Σ2 Γ2))
      (let* ((Σ (set-union Σ1 Σ2))
-            (A-max (append (map (λ (x) (cons (gensym) x)) (cartesian-product A1 A2)) A1 A2))
-            (S (foldr (λ (x a) (if a a (if (equal? (list S1 S2) (cdr x)) (car x) #f))) #f A-max))
-            (F (filter (λ (x) (and (memv (car x) F1) (memv (cadr x) F2))) A-max))) 
-       (let loop ((Γ (map (λ (_) '()) ))
-                  (δ-used '())
-                  (δ-available (set-union δ1 δ2))
-                  (A '())
-                  (Q `(,S))
-                  (V '()))
-         (match Q
-             ['() (Automaton S F A δ-used Σ Γ)]
-             [`(,(? (member-of V)) . ,Q) (loop Γ δ-used δ-available A Q V)]
-             [`((,s ,ks) . ,rest)
-              (let ((V `((,s ,ks) . ,V))
-                    (A (if (and (member s F s) (all-empty? ks) (include? a)) (f a A) A))
-                    (T (update-T
-                        rest
-                        (א Σ a)
-                        (apply-transitions U δ s ks a)
-                        (update-epsilons s δ ks a))))
-                (loop T V A))])))]))
+            (Γ (append Γ1 Γ2))
+            (S (list S1 S2))
+            (F-max (cartesian-product F1 F2))
+            (rules (append
+                    (add-stacks-right δ1 (length Γ2))
+                    (add-stacks-left δ2 (length Γ1))))
+            (cstates (cartesian-product A1 A2))
+            (δ (foldr (λ (x a) (append (find-rules x rules) a)) rules cstates))
+            (A (to-set (cons S (set-union (map car δ) (map caddr δ)))))
+            (F (set-intersection A F-max)))
+       ;; making single-symbol names for compound states, and updating S, F, A, and δ
+       (minimize-PDA (give-names (Automaton S F A δ Σ Γ)))
+       )]))
 
-
-
+;;;;;;;;;;;;;
+;; Difference
 
 (define (M-Difference M1 M2)
   (match* (M1 M2)
