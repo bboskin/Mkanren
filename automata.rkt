@@ -61,11 +61,53 @@
             (δ (append trash-rules δ)))
        (Automaton S F A δ Σ Γ))]))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helper functions for Intersection
+;; (which for now assumes separate namespaces for the two input machines
+
+
+(define (state-cart-prod A1 A2)
+  (foldr (λ (a v) (append (map (λ (x) `(,a ,x)) A2)  v))
+         '()
+         A1)
+  (match A1
+    ['() (map list A2)]
+    [`(,a . ,d)
+     (map
+      (λ (x)
+        `(,(symbol-append a (car x)) ,a . ,(cdr x)))
+      (state-cart-prod d A2))]))
+
 (define (M-Intersection M1 M2)
   (match* (M1 M2)
     [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
       (Automaton S2 F2 A2 δ2 Σ2 Γ2))
-     'TODO]))
+     (let* ((Σ (set-union Σ1 Σ2))
+            (A-max (append (map (λ (x) (cons (gensym) x)) (cartesian-product A1 A2)) A1 A2))
+            (S (foldr (λ (x a) (if a a (if (equal? (list S1 S2) (cdr x)) (car x) #f))) #f A-max))
+            (F (filter (λ (x) (and (memv (car x) F1) (memv (cadr x) F2))) A-max))) 
+       (let loop ((Γ (map (λ (_) '()) ))
+                  (δ-used '())
+                  (δ-available (set-union δ1 δ2))
+                  (A '())
+                  (Q `(,S))
+                  (V '()))
+         (match Q
+             ['() (Automaton S F A δ-used Σ Γ)]
+             [`(,(? (member-of V)) . ,Q) (loop Γ δ-used δ-available A Q V)]
+             [`((,s ,ks) . ,rest)
+              (let ((V `((,s ,ks) . ,V))
+                    (A (if (and (member s F s) (all-empty? ks) (include? a)) (f a A) A))
+                    (T (update-T
+                        rest
+                        (א Σ a)
+                        (apply-transitions U δ s ks a)
+                        (update-epsilons s δ ks a))))
+                (loop T V A))])))]))
+
+
+
 
 (define (M-Difference M1 M2)
   (match* (M1 M2)

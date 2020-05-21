@@ -41,7 +41,7 @@
 > (length (Automaton-all-states (minimize-PDA Val-of)))
 43
 (length (Automaton-transition-function (minimize-PDA Val-of)))
-194
+262
 |#
 
 (define val-of

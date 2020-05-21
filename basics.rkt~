@@ -12,15 +12,24 @@
          
          run
 
-         ;; basics
+         ;; set basics
          set-cons
          set-union
          set-difference
          set-intersection
-         set-equal?
-         
+
+         set-equal??
+
+         ;; list basics
          snoc
-         member-of)
+         member-of
+         replace*
+         member*
+         
+
+         ;; variable name management
+         symbol-append
+         rename-xs)
 
 
 
@@ -32,7 +41,7 @@
    all-states          ;; Q
    transition-function ;; δ
    alphabet            ;; Σ
-   stack-alphabets]    ;; (a list of Γs, with one alphabet for each stack)
+   stack-alphabets]    ;; (a list of Γs, with one alphabet for each stack, so we can have as many stacks as we want without changing anything!)
   #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -42,19 +51,48 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+;; Variable names
+(define (symbol-append s1 s2)
+  (string->symbol
+   (string-append
+    (symbol->string s1)
+    (symbol->string s2))))
+
+;; to ensure separate namespaces
+
+(define (rename-xs xs ext ls)
+  (cond
+    [(member ls xs) (ext ls)]
+    [(cons? ls)
+     (cons (rename-xs xs ext (car ls))
+           (rename-xs xs ext (cdr ls)))]
+    [else ls]))
 
 ;; Lists
 
 (define (snoc x s) (foldr cons `(,x) s))
 (define (member-of s) (λ (x) (member x s)))
 
+(define (replace* old new x)
+  (cond
+    [(equal? x old) new]
+    [(cons? x)
+     (cons (replace* old new (car x))
+           (replace* old new (cdr x)))]
+    [else x]))
+
+(define (member* x l)
+  (or (equal? x l)
+      (and (cons? l)
+           (or (member* x (car l))
+               (member* x (cdr l))))))
+
 ;; Sets
 (define (set-cons x s) (if (member x s) s (cons x s)))
 (define (set-union s1 s2) (foldr set-cons s2 s1))
 (define (set-difference s1 s2) (foldr remove s1 s2))
 (define (set-intersection s1 s2) (filter (member-of s2) s1))
-
-(define (set-equal? s1 s2)
+(define (set-equal?? s1 s2)
   (and (andmap (λ (x) (member x s2)) s1)
        (andmap (λ (x) (member x s1)) s2)))
 
@@ -95,8 +133,9 @@
 (define (Fk A δ U search)
   (λ (old L δ ε)
     (match search
-      ['dfs (append (foldr set-union '() (map δ L)) ε old)]
-      ['bfs (append old ε (foldr set-union '() (map δ L)))])))
+      ['dfs (append (foldr append '() (map δ L)) ε old)]
+      ['bfs (append old ε (foldr append '() (map δ L)))]
+      ['shuff (append old (shuffle (append ε (foldr append '() (map δ L)))))])))
 
 
 
@@ -141,36 +180,32 @@
    '()
    δ))
 
+
 (define-syntax run
-  (syntax-rules (display)
-    ((_ M I stop? go? U b f א Π disp?)
+  (syntax-rules ()
+    ((_ M I stop? A-stop? include? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
-        (let ((T (F0 S Γ I))
-              (update-T (Fk A δ U Π))
+        (let ((update-T (Fk A δ U Π))
               (F? (final-state? F)))
-          (let loop ((T T)
-                     (V '()))
+          (let loop ((T (F0 S Γ I)) (V '()) (A b))
             (begin
               (if disp? (displayln T) void)
               (match T
-                ['() b]
-                [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V)]
+                ['() A]
+                [(? (λ (x) (A-stop? A))) A]
+                [`(,(? (member-of V)) . ,rest) (loop rest V A)]
+                [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V A)]
                 [`((,s ,ks ,a) . ,rest)
-                 
-                 (if (member `(,s ,ks ,a) V)
-                     (loop rest V)
-                     (let ((rec (λ ()
-                                  (loop (update-T
-                                         rest
-                                         (א Σ a)
-                                         (apply-transitions U δ s ks a)
-                                         (update-epsilons s δ ks a))
-                                        `((,s ,ks ,a) . ,V)))))
-                       (if (and (F? s) (all-empty? ks) (go? a))
-                           (f a rec)
-                           (rec))))]))))]))
-    ((_ M I stop? go? U b f א)
-     (run M I stop? go? U b f א 'bfs #f))
-    ((_ M I stop? go? U b f א disp?)
-     (run M I stop? go? U b f א 'bfs disp?))))
+                 (let ((V `((,s ,ks ,a) . ,V))
+                       (A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
+                       (T (update-T
+                           rest
+                           (א Σ a)
+                           (apply-transitions U δ s ks a)
+                           (update-epsilons s δ ks a))))
+                   (loop T V A))]))))]))
+    ((_ M I stop? A-stop? include? U b f א)
+     (run M I stop? A-stop? include? U b f א 'bfs #f))
+    ((_ M I stop? A-stop? include? U b f א disp?)
+     (run M I stop? A-stop? include? U b f א 'bfs disp?))))

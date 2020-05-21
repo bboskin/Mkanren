@@ -25,6 +25,9 @@
          member-of
          replace*
          member*
+
+         ;; stack function used in M-Intersection
+         all-empty?
          
 
          ;; variable name management
