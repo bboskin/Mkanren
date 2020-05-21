@@ -44,10 +44,10 @@
      (match (RE->DFA e1)
        [(Automaton S1 F1 A1 δ1 Σ1 Γ1)
         (Automaton
-         S1 (cons S1 F1) A1
-         (append (map (λ (x) `(,x ε ,S1)) F1) δ1)
-         Σ1
-         '())])]
+           S1 (cons S1 F1) A1
+           (append (map (λ (x) `(,x ε ,S1)) F1) δ1)
+           Σ1
+           '())])]
     [else (error "Not a valid RE!!")]))
 
 

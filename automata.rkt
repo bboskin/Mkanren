@@ -12,6 +12,8 @@
 
 
 
+(define (M-Difference M1 M2)
+  (M-Intersection M1 (M-Negation M2)))
 
 (define (M-Union M1 M2)
   (match* (M1 M2)
@@ -147,26 +149,6 @@ input symbols
                   (loop ls)))]))))]))
 
 
-#;(define (find-rules c δ)
-  (match c
-    [`(,s1 ,s2)
-     (let ((s1-rel (filter (λ (x) (eqv? (car x) s1)) δ))
-           (s2-rel (filter (λ (x) (eqv? (car x) s2)) δ)))
-       (let loop ((ls (append s1-rel s2-rel)))
-         (match ls
-           ['() '()]
-           [`((,from ,on ,to . ,stck) . ,ls)
-            (let ((v (loop ls)))
-              (let loop ((v v))
-                (match v
-                  ['() `(((,s1 ,s2) ,on ,to . ,stck))]
-                  [`((,f ,c ,t . ,stck2) . ,v)
-                   (let ((s? (and (eqv? on c)
-                                  (stacks-mutually-occur? stck stck2))))
-                     (if s?
-                         (cons `(,f ,c ,(merge to t) . ,s?) v)
-                         (cons `(,f ,c ,t . ,stck2) (loop v))))])))])))]))
-
 (define (give-names A)
   (match A
     [(Automaton S F A δ Σ Γ)
@@ -185,7 +167,7 @@ input symbols
   (match* (M1 M2)
     [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
       (Automaton S2 F2 A2 δ2 Σ2 Γ2))
-     (let* ((Σ (set-union Σ1 Σ2))
+     (let* ((Σ (set-intersection Σ1 Σ2))
             (Γ (append Γ1 Γ2))
             (S (list S1 S2))
             (F-max (cartesian-product F1 F2))
@@ -193,21 +175,20 @@ input symbols
                     (add-stacks-right δ1 (length Γ2))
                     (add-stacks-left δ2 (length Γ1))))
             (cstates (cartesian-product A1 A2))
-            (δ (foldr (λ (x a) (append (find-rules x rules) a)) rules cstates))
+            (δ (filter
+                (λ (x)
+                  (and (list? (car x))
+                       (list? (caddr x))
+                       (or (eqv? (cadr x) 'ε)
+                           (memv (cadr x) Σ))))
+                (foldr (λ (x a) (append (find-rules x rules) a)) rules cstates)))
             (A (to-set (cons S (set-union (map car δ) (map caddr δ)))))
             (F (set-intersection A F-max)))
        ;; making single-symbol names for compound states, and updating S, F, A, and δ
        (minimize-PDA (give-names (Automaton S F A δ Σ Γ)))
        )]))
 
-;;;;;;;;;;;;;
-;; Difference
 
-(define (M-Difference M1 M2)
-  (match* (M1 M2)
-    [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
-      (Automaton S2 F2 A2 δ2 Σ2 Γ2))
-     'TODO]))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
