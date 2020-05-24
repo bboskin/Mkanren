@@ -85,17 +85,17 @@ input symbols
 
 
 
-(define (add-stacks-right δ k)
-  (let ((v (build-list k (λ (_) 'preserve-stack))))
-    (map (λ (x) (append x v)) δ)))
-
-(define (add-stacks-left δ k)
-  (let ((v (build-list k (λ (_) 'preserve-stack))))
+(define (add-stack-ignores mode δ k)
+  (match mode
+    ['right (let ((v (build-list k (λ (_) 'preserve-stack))))
+              (map (λ (x) (append x v)) δ))]
+    ['left (let ((v (build-list k (λ (_) 'preserve-stack))))
     (map (λ (x)
            (match x
-             [`(,S1 ,c ,S2 . ,s)
-              `(,S1 ,c ,S2 ,@v . ,s)]))
-         δ)))
+             [`(,S1 ,c ,S2 . ,s) `(,S1 ,c ,S2 ,@v . ,s)]))
+         δ))]))
+
+
 
 (define (make-var-names A)
   (cond
@@ -130,23 +130,42 @@ input symbols
            [else #f]))]
     [(_ _) #f]))
 
-(define (find-rules c δ)
-  (match c
-    [`(,s1 ,s2)
-     (let ((s1-rel (filter (λ (x) (eqv? (car x) s1)) δ))
-           (s2-rel (filter (λ (x) (eqv? (car x) s2)) δ)))
-       (let ((options (cartesian-product s1-rel s2-rel)))
-         (let loop ((ls options))
-         (match ls
-           ['() '()]
-           [`(((,from1 ,on1 ,to1 . ,stck1)
-               (,from2 ,on2 ,to2 . ,stck2))
-               . ,ls)
-            (let ((s? (and (eqv? on1 on2)
-                           (stacks-mutually-occur? stck1 stck2))))
-              (if s?
-                  (cons `((,s1 ,s2) ,on1 ,(merge to1 to2) . ,s?) (loop ls))
-                  (loop ls)))]))))]))
+(define ((find-rules s1 s2 S1 S2 Σ δ1 δ2) c a)
+  (append (let ((s1-rel (filter (λ (x) (eqv? (car x) s1)) δ1))
+                (s2-rel (filter (λ (x) (eqv? (car x) s2)) δ2)))
+            (foldr
+             (λ (x a)
+               (match x
+                 [`((,from1 ,from2)
+                    ,(? (λ (x) (or (eqv? c 'ε) (memv c Σ))) c)
+                    ,tos . ,stack-instrs)
+                  (append
+                   (map (λ (e) `(,from1 ,c ,from2 ,e . ,stack-instrs))
+                        (cartesian-product
+                         (filter (λ (x) (memv x S1)) tos)
+                         (filter (λ (x) (memv x S2)) tos)))
+                   a)]
+                 [else a]))
+             '()
+             (foldr
+              (λ (x a)
+                (match x
+                  [`((,from1 ,on1 ,to1 . ,stck1)
+                     (,from2 ,on2 ,to2 . ,stck2))
+                   (cond
+                     [(and (or (eqv? on1 #t)
+                               (eqv? on2 #t)
+                               (eqv? on1 on2))
+                           (stacks-mutually-occur? stck1 stck2))
+                      =>
+                      (λ (stack-instrs)
+                        `(((,s1 ,s2) ,on1 ,(merge to1 to2) . ,stack-instrs)
+                          . ,a))]
+                     [else a])]))
+              '()
+              (foldr
+               (cartesian-product s1-rel s2-rel)))))
+          a))
 
 
 (define (give-names A)
@@ -167,23 +186,20 @@ input symbols
   (match* (M1 M2)
     [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
       (Automaton S2 F2 A2 δ2 Σ2 Γ2))
+     
      (let* ((Σ (set-intersection Σ1 Σ2))
             (Γ (append Γ1 Γ2))
             (S (list S1 S2))
-            (F-max (cartesian-product F1 F2))
-            (rules (append
-                    (add-stacks-right δ1 (length Γ2))
-                    (add-stacks-left δ2 (length Γ1))))
-            (cstates (cartesian-product A1 A2))
-            (δ (filter
-                (λ (x)
-                  (and (list? (car x))
-                       (list? (caddr x))
-                       (or (eqv? (cadr x) 'ε)
-                           (memv (cadr x) Σ))))
-                (foldr (λ (x a) (append (find-rules x rules) a)) rules cstates)))
-            (A (to-set (cons S (set-union (map car δ) (map caddr δ)))))
-            (F (set-intersection A F-max)))
+            (A-max (cartesian-product A1 A2))
+            
+            (δ (foldr (find-rules
+                       S1 S2 Σ
+                       (add-stack-ignores 'right δ1 (length Γ2))
+                       (add-stack-ignores 'left δ2 (length Γ1)))
+                      '()
+                      A-max))
+            (A (to-set (cons S (append (map car δ) (map caddr δ)))))
+            (F (set-intersection A (cartesian-product F1 F2))))
        ;; making single-symbol names for compound states, and updating S, F, A, and δ
        (minimize-PDA (give-names (Automaton S F A δ Σ Γ)))
        )]))
@@ -193,6 +209,8 @@ input symbols
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; two-phase PDA minimization
+;; first states are minimized (and transitions as permitted)
+;; and then stack symbols are consolidated (and transitions as permitted)
 
 (define (rep S groups)
   (caar (filter (λ (x) (member S x)) groups)))

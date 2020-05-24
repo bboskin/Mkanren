@@ -83,3 +83,21 @@
 (define Eng/min (minimize-PDA (CNF->PDA (CFG->CNF Eng))))
 
 
+;; LOL this is just palindrome!  I need to implement turing machines
+;; for this (at least linearly bounded)
+(define Double
+  (Automaton
+   'S
+   '(S)
+   '(S)
+   '(;; counting the first half
+     (S a S (pop on #t push (a)))
+     (S b S (pop on #t push (b)))
+     (S c S (pop on #t push (c)))
+     ;; popping the 2nd half
+     (S a S (pop on a push ()))
+     (S b S (pop on b push ()))
+     (S c S (pop on c push ()))
+     )
+   '(a b c)
+   '((a b c))))

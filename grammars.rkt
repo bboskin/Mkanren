@@ -194,7 +194,18 @@
       (let* ((S0 (caar G))
              (new-S0 (gensym S0))
              (G (remove-epsilons new-S0 `((,new-S0 -> ,S0) ,@G) '())))
-        (consolidate-CNF (CNF->CNF* G '() '() #f)))))
+        (consolidate-again (consolidate-CNF (CNF->CNF* G '() '() #f))))))
+
+(define (consolidate-again G)
+  (let loop ((G (cdr G))
+             (ans (list (car G))))
+    (match G
+      ['() ans]
+      [`((,S -> . ,rules) . ,G)
+       (if (not (member* S (append ans G)))
+           (consolidate-again (append ans G))
+           (loop G (snoc `(,S -> . ,rules) ans)))])))
+
 
 
 (define (consolidate-CNF-help S es G)
@@ -223,9 +234,7 @@
 
 
 ;;;;;;;;;;;;;;
-;; set operations on grammars (incomplete, at the PDA level we do all 4
-
-
+;; set operations on grammars (no negation)
 
 (define (G-Union G1 G2)
   (let ((G2 (rename-xs (map car G2) (λ (x) (symbol-append x 'b)) G2))
@@ -241,5 +250,130 @@
       ,@G1
       ,@G2)))
 
+;;;;; Helpers for intersection
+
+(define (find-usable-rules G book)
+  (let ((new (filter
+              (λ (x)
+                (match x
+                  [`(,S -> ,rules ...)
+                   (andmap
+                    (λ (x)
+                      (match x
+                        [(? terminal?) #t]
+                        [`(,S1 ,S2) (and (assv S1 book) (assv S2 book))]
+                        [else #f]))
+                    rules)]))
+              G)))
+    (values (set-difference G new)
+            new)))
+
+(define (trim G book dead)
+  (foldr
+   (λ (x a)
+     (match x
+       [`(,S -> ,rules ...)
+        (let ((keepers
+               (filter
+                (λ (x)
+                  (match x
+                    [(? terminal?) #t]
+                    [`(,S1 ,S2)
+                     (and (not memv S1 dead) (memv S2 dead))]
+                    [else #f]))
+                rules)))
+          (if (null? keepers) a `((,S -> . ,keepers) . ,a)))]))
+   G))
 
 
+(define ((lookup b) x)
+  (match x
+    [(? terminal?) x]
+    [(? symbol?) (cadr (assv x b))]
+    [`(,S1 ,S2) `(,(cadr (assv S1 b)) ,(cadr (assv S1 b)))]))
+
+(define (merge g1 g2 r b dead)
+  (match g1
+      ['() (values r b dead)]
+      [`((,S -> . ,r1) . ,g1)
+       (let-values
+           (((this-r this-b this-dead)
+             (let loop ((ls g2)
+                        (r r)
+                        (b b)
+                        (dead dead))
+               (match ls
+                 ['() (values r b (set-cons S dead))]
+                 [`((,S2 -> ,r2 ...) . ,ls)
+                  (if (set-equal?? r1 r2)
+                      (values (set-cons `(,S -> . ,r1) r)
+                              (set-cons `(,S ,S)
+                                        (set-cons `(,S2 ,S) b))
+                              dead)
+                      (loop ls r b dead))]))))
+         (merge g1 g2 this-r this-b this-dead))]))
+
+
+(define (apply-book G b)
+  (map
+   (λ (x)
+     (match x
+       [`(,S -> . ,rules)
+        `(,((lookup b) S) -> . ,(map (lookup b) rules))]))
+   G))
+
+(define (merge-rules G1 G2 rules book dead)
+  (let-values
+      (((G1 G1-ready) (find-usable-rules G1 book))
+       ((G2 G2-ready) (find-usable-rules G2 book)))
+    (if (or (null? G1-ready)
+            (null? G2-ready))
+        (let ((G1t (trim G1 book dead))
+              (G2t (trim G2 book dead)))
+          (displayln "ehre")
+          (if (and (set-equal?? G1 G1t) (set-equal?? G2 G2t))
+              (values '() '() rules book)
+              (merge-rules G1t G2t rules book)))
+        (begin
+          (displayln "ehre33")
+          (displayln G1-ready)
+          (displayln G2-ready)
+          (let-values (((r b dead) (merge G1-ready G2-ready rules book dead)))
+          (let ((b (append b book)))
+            (values (apply-book G1 b)
+                    (apply-book G2 b)
+                    (apply-book r b)
+                    b
+                    dead)))))))
+
+(define (rules->grammar r b s1 s2)
+  (let ((S1 (if (assv s1 b) ((lookup b) s1) #f))
+        (S2 (if (assv s2 b) ((lookup b) s2) #f)))
+    (if (and S1 S2)
+        (let* ((ln1 (assv S1 r))
+               (ln2 (assv S2 r))
+               (S (gensym 'S))
+               (G (remove ln1 (remove ln2 r))))
+          `((,S -> ,@(if ln1 (cddr ln1) '())
+                ,@(if ln2 (cddr ln2) '())) . ,G))
+        '())))
+
+(define (G-Intersection G1 G2)
+  ;; we have 2 CNFs with non-conflicting namespaces
+  (let* ((G1 (rename-xs (map car G1) (λ (x) (symbol-append x 'a)) G1))
+         (G2 (rename-xs (map car G2) (λ (x) (symbol-append x 'b)) G2))
+         (G1 (if (CNF? G1) G1 (CFG->CNF G1)))
+         (G2 (if (CNF? G2) G2 (CFG->CNF G2)))
+         (S1 (caar G1))
+         (S2 (caar G2)))
+    (let loop ((G1 G1)
+               (G2 G2)
+               (rules '())
+               (book '())
+               (dead '()))
+      (cond
+        [(and (null? G1) (null? G2))
+         (rules->grammar rules book S1 S2)]
+        [else (call-with-values
+               (λ () (merge-rules G1 G2 rules book dead))
+               loop)]))))

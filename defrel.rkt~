@@ -1,0 +1,10 @@
+#lang racket
+
+
+
+#;
+(defrel num?
+  [0 1])
+#;
+(defrel even?o
+  ['(0) (num . even?o)])

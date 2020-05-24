@@ -9,7 +9,6 @@
          Automaton-stack-alphabets
         
          terminal?
-         
          run
 
          ;; basic basics
@@ -36,8 +35,7 @@
          ;; THE REST ARE FUNCTIONS TO hide again
          ;; stack function used in M-Intersection
          all-empty?
-         check-stacks
-         )
+         check-stacks)
 
 
 
@@ -115,6 +113,8 @@
        (andmap (λ (x) (member x s1)) s2)))
 (define (to-set ls)
   (foldr set-cons '() ls))
+
+
 ;; Stacks 
 (define (stack-empty? k) (equal? k '(#f)))
 (define (all-empty? ks) (andmap stack-empty? ks))
@@ -200,30 +200,31 @@
    δ))
 
 
+
 (define-syntax run
   (syntax-rules ()
     ((_ M I stop? A-stop? include? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
-        (let ((update-T (Fk A Π))
+        (let ((update-Q (Fk A Π))
               (F? (final-state? F)))
-          (let loop ((T (F0 S Γ I)) (V '()) (A b))
+          (let loop ((Q (F0 S Γ I)) (V '()) (A b))
             (begin
-              (if disp? (displayln T) void)
-              (match T
+              (if disp? (displayln Q) void)
+              (match Q
                 ['() A]
                 [(? (λ (x) (A-stop? A))) A]
                 [`(,(? (member-of V)) . ,rest) (loop rest V A)]
                 [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V A)]
-                [`((,s ,ks ,a) . ,r)
+                [`((,s ,ks ,a) . ,Q)
                  (let ((V `((,s ,ks ,a) . ,V))
                        (A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
-                       (T (update-T
-                           r
+                       (Q (update-Q
+                           Q
                            (א Σ a)
                            (apply-transitions U δ s ks a)
                            (update-epsilons s δ ks a))))
-                   (loop T V A))]))))]))
+                   (loop Q V A))]))))]))
     ((_ M I stop? A-stop? include? U b f א)
      (run M I stop? A-stop? include? U b f א 'bfs #f))
     ((_ M I stop? A-stop? include? U b f א disp?)
