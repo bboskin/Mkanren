@@ -268,7 +268,9 @@
     (values (set-difference G new)
             new)))
 
-(define (trim G book dead)
+(define (trim G book dead Σ)
+  (displayln "trimming")
+  (displayln Σ)
   (foldr
    (λ (x a)
      (match x
@@ -277,12 +279,13 @@
                (filter
                 (λ (x)
                   (match x
-                    [(? terminal?) #t]
+                    [`',a (memv a Σ)]
                     [`(,S1 ,S2)
-                     (and (not memv S1 dead) (memv S2 dead))]
+                     (and (not (memv S1 dead)) (memv S2 dead))]
                     [else #f]))
                 rules)))
           (if (null? keepers) a `((,S -> . ,keepers) . ,a)))]))
+   '()
    G))
 
 
@@ -322,29 +325,33 @@
         `(,((lookup b) S) -> . ,(map (lookup b) rules))]))
    G))
 
-(define (merge-rules G1 G2 rules book dead)
-  (let-values
-      (((G1 G1-ready) (find-usable-rules G1 book))
-       ((G2 G2-ready) (find-usable-rules G2 book)))
-    (if (or (null? G1-ready)
-            (null? G2-ready))
-        (let ((G1t (trim G1 book dead))
-              (G2t (trim G2 book dead)))
-          (displayln "ehre")
-          (if (and (set-equal?? G1 G1t) (set-equal?? G2 G2t))
-              (values '() '() rules book)
-              (merge-rules G1t G2t rules book)))
-        (begin
-          (displayln "ehre33")
+(define (merge-rules G1 G2 rules book dead Σ)
+  (let ((G1 (trim G1 book dead Σ))
+        (G2 (trim G2 book dead Σ)))
+    
+  (displayln "trimmed")
+  (displayln G1)
+  (displayln G2)
+  (if (or (null? G1) (null? G2))
+      (begin
+        (displayln "nothing left!")
+        (values '() '() rules book dead))
+      (begin
+        (displayln "lets go")
+        (let-values
+          (((G1 G1-ready) (find-usable-rules G1 book))
+           ((G2 G2-ready) (find-usable-rules G2 book)))
+          (displayln "clauses in the book")
           (displayln G1-ready)
           (displayln G2-ready)
-          (let-values (((r b dead) (merge G1-ready G2-ready rules book dead)))
-          (let ((b (append b book)))
-            (values (apply-book G1 b)
-                    (apply-book G2 b)
-                    (apply-book r b)
-                    b
-                    dead)))))))
+          (let-values
+              (((r b dead) (merge G1-ready G2-ready rules book dead)))
+            (let ((b (append b book)))
+              (values (apply-book G1 b)
+                      (apply-book G2 b)
+                      (apply-book r b)
+                      b
+                      dead))))))))
 
 (define (rules->grammar r b s1 s2)
   (let ((S1 (if (assv s1 b) ((lookup b) s1) #f))
@@ -354,26 +361,45 @@
                (ln2 (assv S2 r))
                (S (gensym 'S))
                (G (remove ln1 (remove ln2 r))))
-          `((,S -> ,@(if ln1 (cddr ln1) '())
+          ;; we should only need the path to S1 (right?) leaving for now
+          `((,S ->
+                ,@(if ln1 (cddr ln1) '())
                 ,@(if ln2 (cddr ln2) '())) . ,G))
         '())))
 
+(define (extract-Σ G)
+  (match G
+    ['() '()]
+    [`',a `(,a)]
+    [`(,a . ,d) (set-union (extract-Σ a) (extract-Σ d))]
+    [else '()]))
+
+
 (define (G-Intersection G1 G2)
-  ;; we have 2 CNFs with non-conflicting namespaces
-  (let* ((G1 (rename-xs (map car G1) (λ (x) (symbol-append x 'a)) G1))
-         (G2 (rename-xs (map car G2) (λ (x) (symbol-append x 'b)) G2))
-         (G1 (if (CNF? G1) G1 (CFG->CNF G1)))
-         (G2 (if (CNF? G2) G2 (CFG->CNF G2)))
+  (let* ((G1 (let ((G (rename-xs (map car G1) (λ (x) (symbol-append x 'a)) G1) ))
+               (if (CNF? G) G (CFG->CNF G))))
+         (G2 (let ((G (rename-xs (map car G1) (λ (x) (symbol-append x 'a)) G2) ))
+               (if (CNF? G) G (CFG->CNF G))))
          (S1 (caar G1))
-         (S2 (caar G2)))
+         (S2 (caar G2))
+         (Σ (set-intersection (extract-Σ G1) (extract-Σ G2))))
+    (displayln G1)
+    (displayln G2)
+    (displayln Σ)
     (let loop ((G1 G1)
                (G2 G2)
                (rules '())
                (book '())
                (dead '()))
+      (displayln "ITER")
+      (displayln G1)
+      (displayln G2)
+      (displayln rules)
+      (displayln book)
+      (displayln dead)
       (cond
         [(and (null? G1) (null? G2))
          (rules->grammar rules book S1 S2)]
         [else (call-with-values
-               (λ () (merge-rules G1 G2 rules book dead))
+               (λ () (merge-rules G1 G2 rules book dead Σ))
                loop)]))))
