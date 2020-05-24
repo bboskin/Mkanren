@@ -6,7 +6,8 @@
          RE->CFG CFG->CNF
          set-equal??
          G-Union
-         G-Concatenation)
+         G-Concatenation
+         G-Intersection)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammars: REs and CFGs, and how to convert an RE into a CFG
@@ -110,6 +111,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; CFG -> CNF
 
+;; TODO : get rid of ininite loop for all grammars
+;; (ctrex: (S -> 'a S))
+
 (define (add-epsilon-subs-helper S ln)
   (cond
     [(null? ln) '(())]
@@ -189,12 +193,13 @@
     [else (error 'CFG->CNF (format "invalid rule: ~s" (car G)))]))
 
 (define (CFG->CNF G)
-  (if (not (CFG? G))
-      (error (format "Not a valid grammars: ~s" G))
-      (let* ((S0 (caar G))
-             (new-S0 (gensym S0))
-             (G (remove-epsilons new-S0 `((,new-S0 -> ,S0) ,@G) '())))
-        (consolidate-again (consolidate-CNF (CNF->CNF* G '() '() #f))))))
+  (if (null? G) '()
+      (if (not (CFG? G))
+          (error (format "Not a valid grammars: ~s" G))
+          (let* ((S0 (caar G))
+                 (new-S0 (gensym S0))
+                 (G (remove-epsilons new-S0 `((,new-S0 -> ,S0) ,@G) '())))
+            (consolidate-again (consolidate-CNF (CNF->CNF* G '() '() #f)))))))
 
 (define (consolidate-again G)
   (let loop ((G (cdr G))
@@ -325,25 +330,23 @@
         `(,((lookup b) S) -> . ,(map (lookup b) rules))]))
    G))
 
-(define (merge-rules G1 G2 rules book dead Σ)
+#;(define (merge-rules G1 G2 rules book dead Σ)
   (let ((G1 (trim G1 book dead Σ))
         (G2 (trim G2 book dead Σ)))
-    
-  (displayln "trimmed")
-  (displayln G1)
-  (displayln G2)
-  (if (or (null? G1) (null? G2))
+    (if (and (null? G1) (null? G2))
       (begin
         (displayln "nothing left!")
         (values '() '() rules book dead))
       (begin
-        (displayln "lets go")
         (let-values
           (((G1 G1-ready) (find-usable-rules G1 book))
            ((G2 G2-ready) (find-usable-rules G2 book)))
           (displayln "clauses in the book")
           (displayln G1-ready)
           (displayln G2-ready)
+          (displayln "others")
+          (displayln G1)
+          (displayln G2)
           (let-values
               (((r b dead) (merge G1-ready G2-ready rules book dead)))
             (let ((b (append b book)))
@@ -353,6 +356,33 @@
                       b
                       dead))))))))
 
+(define (merge-rules G1 G2 rules book dead Σ)
+  (begin
+        (let-values
+          (((G1 G1-ready) (find-usable-rules G1 book))
+           ((G2 G2-ready) (find-usable-rules G2 book)))
+          (displayln "clauses in the book")
+          (displayln G1-ready)
+          (displayln G2-ready)
+          (displayln "others")
+          (displayln G1)
+          (displayln G2)
+          (if (and (null? G1-ready) (null? G2-ready))
+              (let ((G1 (trim G1 book dead Σ))
+                    (G2 (trim G2 book dead Σ)))
+                (begin
+                  (displayln "nothing left!")
+                  (values '() '() rules book dead)))
+              (let-values
+                  (((r b dead) (merge G1-ready G2-ready rules book dead)))
+                (let ((b (append b book)))
+                  (values (apply-book G1 b)
+                          (apply-book G2 b)
+                          (apply-book r b)
+                          b
+                      dead)))
+     ))))
+
 (define (rules->grammar r b s1 s2)
   (let ((S1 (if (assv s1 b) ((lookup b) s1) #f))
         (S2 (if (assv s2 b) ((lookup b) s2) #f)))
@@ -361,7 +391,7 @@
                (ln2 (assv S2 r))
                (S (gensym 'S))
                (G (remove ln1 (remove ln2 r))))
-          ;; we should only need the path to S1 (right?) leaving for now
+          ;; we should only need the path to S1 (right?) but leaving both for now
           `((,S ->
                 ,@(if ln1 (cddr ln1) '())
                 ,@(if ln2 (cddr ln2) '())) . ,G))
@@ -376,30 +406,20 @@
 
 
 (define (G-Intersection G1 G2)
-  (let* ((G1 (let ((G (rename-xs (map car G1) (λ (x) (symbol-append x 'a)) G1) ))
-               (if (CNF? G) G (CFG->CNF G))))
-         (G2 (let ((G (rename-xs (map car G1) (λ (x) (symbol-append x 'a)) G2) ))
-               (if (CNF? G) G (CFG->CNF G))))
+  (let* ((G1 (CFG->CNF (rename-xs (map car G1) (λ (x) (symbol-append x 'a)) G1)))
+         (G2 (CFG->CNF (rename-xs (map car G1) (λ (x) (symbol-append x 'a)) G2)))
          (S1 (caar G1))
          (S2 (caar G2))
          (Σ (set-intersection (extract-Σ G1) (extract-Σ G2))))
-    (displayln G1)
-    (displayln G2)
-    (displayln Σ)
     (let loop ((G1 G1)
                (G2 G2)
                (rules '())
                (book '())
                (dead '()))
-      (displayln "ITER")
-      (displayln G1)
-      (displayln G2)
-      (displayln rules)
-      (displayln book)
-      (displayln dead)
       (cond
         [(and (null? G1) (null? G2))
-         (rules->grammar rules book S1 S2)]
+         (CFG->CNF (rules->grammar rules book S1 S2))]
         [else (call-with-values
                (λ () (merge-rules G1 G2 rules book dead Σ))
                loop)]))))
+
