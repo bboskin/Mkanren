@@ -58,6 +58,13 @@
               (not (null? es))
               (loop r))]))))
 
+(define (extract-Σ G)
+  (match G
+    ['() '()]
+    [`',a `(,a)]
+    [`(,a . ,d) (set-union (extract-Σ a) (extract-Σ d))]
+    [else '()]))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; conversion between grammars.
 
@@ -257,6 +264,18 @@
 
 ;;;;; Helpers for intersection
 
+(define ((lookup b) x)
+  (match x
+    [(? terminal?) x]
+    [(? symbol?)
+     (let ((v (cadr (assv x b))))
+       (if v (cadr v) x))]
+    [`(,S1 ,S2) `(,((lookup b) S1) ,((lookup b) S2))]))
+
+(define (apply-book G b)
+  (map (λ (x) (map (lookup b) x)) G))
+
+#|
 (define (find-usable-rules G book)
   (let ((new (filter
               (λ (x)
@@ -265,8 +284,13 @@
                    (andmap
                     (λ (x)
                       (match x
-                        [(? terminal?) #t]
-                        [`(,S1 ,S2) (and (assv S1 book) (assv S2 book))]
+                        ['ε #t]
+                        [`',a #t]
+                        [`(,S1 ...)
+                         (andmap
+                          (λ (x)
+                            (or (eqv? x S) (assv x book)))
+                          S1)]
                         [else #f]))
                     rules)]))
               G)))
@@ -274,135 +298,83 @@
             new)))
 
 (define (trim G book dead Σ)
-  (displayln "trimming")
-  (displayln Σ)
   (foldr
    (λ (x a)
      (match x
        [`(,S -> ,rules ...)
         (let ((keepers
-               (filter
-                (λ (x)
-                  (match x
-                    [`',a (memv a Σ)]
-                    [`(,S1 ,S2)
-                     (and (not (memv S1 dead)) (memv S2 dead))]
-                    [else #f]))
-                rules)))
+               (if (memv S dead) '()
+                   (filter
+                    (λ (x)
+                      (match x
+                        ['ε #t]
+                        [`',a (memv a Σ)]
+                        [`(,S1 ...)
+                         (andmap (λ (x) (not (memv x dead))) S1)]
+                        [else #f]))
+                    rules))))
+          (displayln "With the deadlist:")
+          (displayln dead)
+          (displayln "and book")
+          (displayln book)
+          (displayln "converted")
+          (displayln rules)
+          (displayln "into")
+          (displayln keepers)
           (if (null? keepers) a `((,S -> . ,keepers) . ,a)))]))
    '()
    G))
 
-
-(define ((lookup b) x)
-  (match x
-    [(? terminal?) x]
-    [(? symbol?) (cadr (assv x b))]
-    [`(,S1 ,S2) `(,(cadr (assv S1 b)) ,(cadr (assv S1 b)))]))
-
 (define (merge g1 g2 r b dead)
   (match g1
-      ['() (values r b dead)]
+      ['() (values r b g2 dead)]
       [`((,S -> . ,r1) . ,g1)
        (let-values
-           (((this-r this-b this-dead)
+           (((this-r this-b this-dead g2-leftovers)
              (let loop ((ls g2)
                         (r r)
                         (b b)
+                        (g2 '())
                         (dead dead))
                (match ls
-                 ['() (values r b (set-cons S dead))]
+                 ['() (values r b g2 dead)]
                  [`((,S2 -> ,r2 ...) . ,ls)
-                  (if (set-equal?? r1 r2)
-                      (values (set-cons `(,S -> . ,r1) r)
-                              (set-cons `(,S ,S)
-                                        (set-cons `(,S2 ,S) b))
-                              dead)
-                      (loop ls r b dead))]))))
-         (merge g1 g2 this-r this-b this-dead))]))
+                  (displayln "the two options are: ")
+                  (displayln `(,S2 -> . ,r2))
+                  (displayln "and")
+                  (displayln `(,S -> . ,r1))
+                  (if (set-equal?? r1 (replace* S S2 r2))
+                      (begin (displayln "yes")(values (set-cons `(,S -> . ,r1) r)
+                              (set-cons `(,S ,S) (set-cons `(,S2 ,S) b))
+                              (append g2 ls) 
+                              dead))
+                      (begin (displayln "no")(loop ls r b (cons`(,S2 -> . ,r2) g2) dead)))]))))
+         (merge g1 g2-leftovers this-r this-b this-dead))]))
 
 
-(define (apply-book G b)
-  (map
-   (λ (x)
-     (match x
-       [`(,S -> . ,rules)
-        `(,((lookup b) S) -> . ,(map (lookup b) rules))]))
-   G))
 
-#;(define (merge-rules G1 G2 rules book dead Σ)
-  (let ((G1 (trim G1 book dead Σ))
-        (G2 (trim G2 book dead Σ)))
-    (if (and (null? G1) (null? G2))
-      (begin
-        (displayln "nothing left!")
-        (values '() '() rules book dead))
-      (begin
-        (let-values
-          (((G1 G1-ready) (find-usable-rules G1 book))
-           ((G2 G2-ready) (find-usable-rules G2 book)))
-          (displayln "clauses in the book")
-          (displayln G1-ready)
-          (displayln G2-ready)
-          (displayln "others")
-          (displayln G1)
-          (displayln G2)
+(define (make-rules G1 G2 rules book dead Σ)
+  (displayln "MAKE-RULES")
+  (let-values
+      (((G1 G1-ready) (find-usable-rules G1 book))
+       ((G2 G2-ready) (find-usable-rules G2 book)))
+    (let ((G1t (trim G1 book dead Σ))
+          (G2t (trim G2 book dead Σ))
+          (G1-ready (trim G1-ready book dead Σ))
+          (G2-ready (trim G2-ready book dead Σ)))
+      (if (and (null? G1-ready) (null? G2-ready))
+          (begin
+            (displayln "no more to do")
+            (values '() '() rules book dead))
           (let-values
-              (((r b dead) (merge G1-ready G2-ready rules book dead)))
-            (let ((b (append b book)))
-              (values (apply-book G1 b)
-                      (apply-book G2 b)
+              (((r b dead g2-leftovers) (merge G1-ready G2-ready rules book dead)))
+            (let ((G1-ready (trim G1-ready book dead Σ))
+                  (G2-ready (trim G2-ready book dead Σ)))
+              (values (apply-book G1t b)
+                      (apply-book (append g2-leftovers G2t) b)
                       (apply-book r b)
                       b
-                      dead))))))))
-
-(define (merge-rules G1 G2 rules book dead Σ)
-  (begin
-        (let-values
-          (((G1 G1-ready) (find-usable-rules G1 book))
-           ((G2 G2-ready) (find-usable-rules G2 book)))
-          (displayln "clauses in the book")
-          (displayln G1-ready)
-          (displayln G2-ready)
-          (displayln "others")
-          (displayln G1)
-          (displayln G2)
-          (if (and (null? G1-ready) (null? G2-ready))
-              (let ((G1 (trim G1 book dead Σ))
-                    (G2 (trim G2 book dead Σ)))
-                (begin
-                  (displayln "nothing left!")
-                  (values '() '() rules book dead)))
-              (let-values
-                  (((r b dead) (merge G1-ready G2-ready rules book dead)))
-                (let ((b (append b book)))
-                  (values (apply-book G1 b)
-                          (apply-book G2 b)
-                          (apply-book r b)
-                          b
-                      dead)))
-     ))))
-
-(define (rules->grammar r b s1 s2)
-  (let ((S1 (if (assv s1 b) ((lookup b) s1) #f))
-        (S2 (if (assv s2 b) ((lookup b) s2) #f)))
-    (if (and S1 S2)
-        (let* ((ln1 (assv S1 r))
-               (ln2 (assv S2 r))
-               (S (gensym 'S))
-               (G (remove ln1 (remove ln2 r))))
-          ;; we should only need the path to S1 (right?) but leaving both for now
-          `((,S ->
-                ,@(if ln1 (cddr ln1) '())
-                ,@(if ln2 (cddr ln2) '())) . ,G))
-        '())))
-
-(define (extract-Σ G)
-  (match G
-    ['() '()]
-    [`',a `(,a)]
-    [`(,a . ,d) (set-union (extract-Σ a) (extract-Σ d))]
-    [else '()]))
+                      dead)))))))
 
 
 (define (G-Intersection G1 G2)
@@ -420,6 +392,61 @@
         [(and (null? G1) (null? G2))
          (CFG->CNF (rules->grammar rules book S1 S2))]
         [else (call-with-values
-               (λ () (merge-rules G1 G2 rules book dead Σ))
+               (λ () (make-rules G1 G2 rules book dead Σ))
                loop)]))))
+|#
+
+
+
+
+(define ((known? Σ book dead) r)
+  (match r
+    [`(,S -> . ,r)
+     (andmap
+      (λ (x)
+        (match x
+          ['ε #t]
+          [`',a (memv a Σ)]
+          [`(,(? symbol? s) ...)
+           (or (ormap (member-of dead) s)
+               (andmap (λ (x) (assv x `((,S) . ,book))) s))]))
+      r)]))
+
+(define incorporate 'TODO)
+(define (G-Intersection G1-init G2-init)
+  (let ((G1 (CFG->CNF G1-init))
+        (G2 (CFG->CNF G2-init)))
+    (let ((Σ (set-intersection (extract-Σ G1) (extract-Σ G2))))
+      (let intersection ((book '())
+                         (dead '())
+                         (G1 G1)
+                         (G2 G2))
+        (match G1
+          ['()
+           (let ((S1 ((lookup book) (caar G1-init))))
+             `((,(gensym 'S) -> ,S1) . ,G2))]
+          [else
+           (let* ((known (filter (known? Σ book dead) G1))
+                  (unknown (set-difference G1 known)))
+             (let-values (((new-book new-dead G2) (incorporate G2 book dead known)))
+               
+             (intersection new-book new-dead unknown G2)))])))))
+
+
+
+
+(define (rules->grammar r b s1 s2)
+  (let ((S1 (if (assv s1 b) ((lookup b) s1) #f))
+        (S2 (if (assv s2 b) ((lookup b) s2) #f)))
+    (if (and S1 S2)
+        (let* ((ln1 (assv S1 r))
+               (ln2 (assv S2 r))
+               (S (gensym 'S))
+               (G (remove ln1 (remove ln2 r))))
+          ;; we should only need the path to S1 (right?) but leaving both for now
+          `((,S ->
+                ,@(if ln1 (cddr ln1) '())
+                ,@(if ln2 (cddr ln2) '())) . ,G))
+        '())))
+
 

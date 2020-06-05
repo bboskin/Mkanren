@@ -83,3 +83,164 @@
 (define Eng/min (minimize-PDA (CNF->PDA (CFG->CNF Eng))))
 
 
+;; LOL this is just palindrome!  I need to implement turing machines
+;; for this (at least linearly bounded)
+(define Double
+  (Automaton
+   'S
+   '(S)
+   '(S)
+   '(;; counting the first half
+     (S a S (pop on #t push (a)))
+     (S b S (pop on #t push (b)))
+     (S c S (pop on #t push (c)))
+     ;; popping the 2nd half
+     (S a S (pop on a push ()))
+     (S b S (pop on b push ()))
+     (S c S (pop on c push ()))
+     )
+   '(a b c)
+   '((a b c))))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; examples from Jack's paper
+
+#;
+(define CDR-DFA-defined-as
+  (Automaton
+   'q0
+   '(q3)
+   '(q0 q1 q2 q3 q4 q5 q6 q7)
+   '(filter map select reduce)
+   '(CDRs Ego-CDRs Ego-f-CDRs Ego-Values Ego-value)
+   '()))
+
+(define CDR-DFA-looks-like
+  (Automaton
+   'CDRs
+   '(Ego.Value)
+   '(CDRs Ego.CDRs Ego-Values Ego.Value
+          Ego.f1-CDRs Ego.f1-Values
+          Ego.fn-CDRs Ego.fn-Values)
+   '((CDRs filter CDRs)
+     (CDRs map Ego.CDRs)
+     (Ego.CDRs select Ego-Values)
+     (Ego.CDRs map Ego.f1-CDRs)
+     (Ego-Values map Ego.Value)
+     (Ego.Value reduce Ego.Value)
+     (Ego.f1-CDRs select Ego.f1-Values)
+     (Ego.f1-CDRs map Ego.fn-CDRs)
+     (Ego.f1-Values reduce Ego-Values)
+     (Ego.fn-CDRs select Ego.fn-Values)
+     (Ego.fn-Values reduce Ego.f1-Values))
+   '(filter map select reduce)
+   '()))
+
+(define what-I-think-they-mean-in-short
+  '((Feature -> (Filter* 'map G Reduce+))
+    (Filter* -> ε ('filter Filter*))
+    (Reduce+ -> 'reduce ('reduce Reduce+))
+    (G -> 'select ('map G 'reduce))))
+
+
+;; but even this is incomplete! they need types
+;; unless it's going to be super restricted
+(define what-I-think-they-mean-in-full/example
+  '((Feature -> (Filter* 'map MapOp G Reduce+))
+    (Filter* -> ε ('filter FilterOp Filter*))
+    (Reduce+ -> ('reduce ReduceOp) ('reduce ReduceOp Reduce+))
+    (G -> ('select SelectOp) ('map MapOp G 'reduce ReduceOp))
+    
+    (MapOp -> 'dur*10)
+    
+    (FilterOp ->
+              'Weekend 'Weekday
+              'AtLeast30Mins
+              'San-Francisco 'Boston 'Detroit)
+    (ReduceOp ->
+              '+ '* 'min 'max
+              'len)
+
+    (SelectOp ->
+              'caller-ID
+              'recipient-ID
+              'date
+              'time
+              'dur
+              'loc
+              'V)))
+
+(define Feature (CNF->PDA (CFG->CNF what-I-think-they-mean-in-full/example)))
+
+;;; not gonna be good since it doesn't have types
+(define (word->feature w)
+  (match w
+      [`() (λ (v) v)]
+      [`(map ,mop ,es ...)
+       (let ((f (word->feature es)))
+         (λ (v)
+           (foldr
+            (λ (x a)
+              (match x
+                [(CDR caller-ID recipient-ID date time dur loc)
+                 (f 'TODO)]
+                [`(,(CDR caller-ID recipient-ID date time dur loc) ,vs ...)
+                 (f 'TODO)]))
+            '() v)))
+       (word->feature es)]
+      [`(filter ,fop ,es ...)
+       (let ((f (word->feature es)))
+         (λ (v)
+           (match fop
+             ['AtLeast30Mins (f (filter (λ (x) (> (CDR-date x) 30)) v))]
+             ['Weekend       (f (filter (λ (x) (memv (CDR-date x) '(Saturday Sunday))) v))]
+             ['Weekday       (f (filter (λ (x) (not (memv (CDR-date x)  '(Saturday Sunday)))) v))]
+             ['San-Francisco (f (filter (λ (x) (eqv? (CDR-loc x)  '(Saturday Sunday))) v))]
+             ['Boston        (f (filter (λ (x) (eqv? (CDR-loc x) 'Boston)) v))]
+             ['Detroit       (f (filter (λ (x) (eqv? (CDR-loc x) 'Detroit)) v))])))]
+      [`(select ,sop ,es ...)
+       (let ((f (word->feature es)))
+         (λ (v)
+           (match sop
+             ['caller-ID    (f (map (λ (x) (CDR-caller-ID (car x))) v))]
+             ['recipient-ID (f (map (λ (x) (CDR-recipient-ID (car x))) v))]
+             ['date         (f (map (λ (x) (CDR-date (car x))) v))]
+             ['time         (f (map (λ (x) (CDR-time (car x))) v))]
+             ['dur          (f (map (λ (x) (CDR-dur (car x))) v))]
+             ['loc          (f (map (λ (x) (CDR-loc (car x))) v))]
+             ['V (f (map cadr v))])))]
+      [`(reduce ,rop ,es ...)
+       (let ((f (word->feature es)))
+         (λ (v)
+           (if (not (list? v))
+               (f v)
+               (match rop
+                 ['min    (f (foldr (λ (x y) (min x y)) #t v))]
+                 ['max    (f (foldr (λ (x y) (max x y)) #f v))]
+                 ['+      (f (foldr + 0 v))]
+                 ['*      (f (foldr * 1 v))]
+                 ['len    (f (length v))]))))]))
+
+
+(define (find-features k)
+  (map word->feature (find-words Feature k)))
+
+(struct CDR
+  [caller-ID
+   recipient-ID
+   date
+   time
+   dur
+   loc])
+
+(define ((apply-feature CDRs) f)
+  (f CDRs))
+
+
+(define Boiz
+  (list
+   (CDR 'Jack 'Aaron '(2 10) '(3 30) 16 'San-Francisco)
+   (CDR 'Ben  'Jack '(2 10) '(5 30) 21 'Boston)))
+
