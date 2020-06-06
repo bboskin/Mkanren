@@ -164,8 +164,8 @@ Eid: symbol describing a field of CDR
                             `(Ann-Arbor Detroit DairyTown KerryTown))) )
     
     ;; reduce ops
-    (+ ,+ 0)
-    (* ,* 1)
+    (+ ,(λ (x) (foldr + 0 x)))
+    (* ,(λ (x) (foldr * 1 x)))
     (mean ,(λ (xs) (/ (foldr + 0 xs) (length xs))) 0)
     (length ,length 0)
     (set ,(λ (x) (foldr set-cons '() x)) ())))
@@ -184,10 +184,6 @@ Eid: symbol describing a field of CDR
 (define (tag->function t)
   (let ((f (assv t FN-TAGS)))
     (if f (cadr f) #f)))
-
-(define (tag->base t)
-  (let ((f (assv t FN-TAGS)))
-    (if f (caddr f) #f)))
 
 
 ;; making random data
@@ -311,15 +307,18 @@ Eid: symbol describing a field of CDR
 
 
 ;; Reduce : ValTree -> ValTree
-(define ((Reduce f b) o)
+(define ((Reduce f) o)
   (match o
-    ['() b]
+    ['() '()]
     [(? Value? v) (f `(,v))]
-    [`(,(? Label? e) . ,(? Value? v)) (f `(,v))]
-    [`(,(? Label? e) ,(? Value? v) ...) (f v)]
-    [`(,(? Label? e) . ,T) `(,e . ,((Reduce f b) T))]
     [`(,(? Value? v) ...) (f v)]
-    [`(,T ...) (map (Reduce f b) T)])) 
+    
+    [`(,(? Label? e) ,(? Label? e2) ,(? Value? v) ...) (f v)]
+    [`(,(? Label? e) ,(? Value? v) ...) (f v)]
+    [`(,(? Label? e) . ,(? Value? v)) (f `(,v))]
+    [`(,(? Label? e) . ,T) `(,e . ,((Reduce f) T))]
+    
+    [`(,T ...) (map (Reduce f) T)])) 
 
 
 
@@ -329,9 +328,8 @@ Eid: symbol describing a field of CDR
     [`(filter ,t ,w ...)  (apply-word w (Filter t ls))]
     [`(map ,t ,w ...)    (apply-word w ((Map t) ls))]
     [`(select ,t ,w ...) (apply-word w ((Select t) ls))]
-    [`(reduce ,f ,w ...)  (let ((f (tag->function f))
-                                (b (tag->base f)))
-                            (apply-word w ((Reduce f b) ls)))]
+    [`(reduce ,f ,w ...)  (let ((f (tag->function f)))
+                            (apply-word w ((Reduce f) ls)))]
     [else                 (error "Invalid word")]))
 
 
@@ -339,8 +337,65 @@ Eid: symbol describing a field of CDR
   (map (λ (x) (apply-word x CDRs))
        ws))
 
+;;;;;;
+(require 2htdp/image)
+(require 2htdp/universe)
+
+(define SQUARE-SIZE 10)
+(define (draw-value v)
+  (cond
+    [(number? v) (square SQUARE-SIZE "solid" "yellow")]
+    [(symbol? v) (square SQUARE-SIZE "solid" "red")]
+    [else (square SQUARE-SIZE "solid" "blue")]))
+
+(define (draw-label _)
+  (square SQUARE-SIZE "solid" "brown"))
+
+(define (draw-CDR v)
+  (square SQUARE-SIZE "solid" "black"))
 
 (define (draw-tree T)
-  'TODO)
+  (match T
+    ['() empty-image]
+    [(? Value? v) (draw-value v)]
+    [`(,(? Value? v) ...)
+     (foldr (λ (x a)
+              (beside (draw-value x) a))
+            empty-image
+            T)]
+    [`(,(? CDR? c) ...)
+     (foldr (λ (x a)
+              (beside (draw-CDR x) a))
+            empty-image
+            T)]
+    [`(,(? Label? e) . ,T)
+     (above (draw-label e)
+            (draw-tree T))]
+    
+    [`(,T ...) (foldr (λ (x a)
+                        (beside (draw-tree x) a))
+                      empty-image
+                      T)]))
+
+(define (step W)
+  (match W
+    [`(,ls ()) (list ls '())]
+    [`(,ls (filter ,t ,w ...))
+     (list (Filter t ls) w)]
+    [`(,ls (map ,t ,w ...))
+     (list ((Map t) ls) w)]
+    [`(,ls (select ,t ,w ...))
+     (list ((Select t) ls) w)]
+    [`(,ls (reduce ,f ,w ...))
+     (let ((f (tag->function f)))
+       (list ((Reduce f) ls) w))]
+    [else (error "Invalid word")]))
+
+(define (animate-eval w)
+  (big-bang `(,CDRs ,w)
+    [on-tick step 1]
+    [to-draw (λ (x)
+               (overlay (draw-tree (car x))
+                        (empty-scene 500 500)))]))
 
 
