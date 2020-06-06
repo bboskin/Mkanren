@@ -44,7 +44,7 @@
   (match G
     ['() #t]
     [`((,S -> . ,es) . ,G)
-     (and (not (null? es)) 
+     (and ;(not (null? es)) 
           (andmap production-rule? es)
           (CFG? G))]))
 
@@ -55,7 +55,7 @@
         ['() #t]
         [`((,S -> ,es ...) . ,r)
          (and (andmap (CNF-production-rule? (eqv? S S0)) es)
-              (not (null? es))
+              #;(not (null? es))
               (loop r))]))))
 
 (define (extract-Σ G)

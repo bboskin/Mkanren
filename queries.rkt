@@ -2,7 +2,7 @@
 
 (require "basics.rkt")
 
-(provide find-words accept? random-word)
+(provide find-words accept? random-word take-words)
 
 (define-syntax accept?
   (syntax-rules ()
@@ -50,6 +50,25 @@
       (λ (a A) (if A A (if (<= k (length (car a))) (car a) #f)))
       (λ (Σ _) (shuffle Σ))
       'shuff
+      disp?)]))
+
+
+(define-syntax take-words
+  (syntax-rules ()
+    [(_ M k) (take-words M k #f)]
+    [(_ M k disp?)
+     (run
+      M
+      '(())
+      (λ (a) #f)
+      (λ (A) (>= (length A) k))
+      (λ (a) #t)
+      (list (λ (_ i a) (snoc i a))
+            )
+      '()
+      (λ (a A) (set-cons (car a) A))
+      (λ (Σ _) Σ)
+      'bfs
       disp?)]))
 
 
