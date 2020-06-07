@@ -157,7 +157,7 @@
       ['shuff (append old (shuffle (append ε (foldr append '() (map δ L)))))])))
 
 
-
+#|
 (define (update-epsilons s δ ks acc)
   (foldr
    (λ (t a)
@@ -200,7 +200,6 @@
    δ))
 
 
-
 (define-syntax run
   (syntax-rules ()
     ((_ M I stop? A-stop? include? U b f א Π disp?)
@@ -225,6 +224,135 @@
                            (apply-transitions U δ s ks a)
                            (update-epsilons s δ ks a))))
                    (loop Q V A))]))))]))
+    ((_ M I stop? A-stop? include? U b f א)
+     (run M I stop? A-stop? include? U b f א 'bfs #f))
+    ((_ M I stop? A-stop? include? U b f א disp?)
+     (run M I stop? A-stop? include? U b f א 'bfs disp?))))
+|#
+
+
+
+
+;; new implementation of run
+;; where δ is locally represented as nested hashtables
+
+
+(define (make-condition instr)
+  (match instr
+    ['preserve-stack #t]
+    [`(pop on #t push ,vs) #t]
+    [`(pop on ,γ push ,vs) γ]))
+
+(define ((subsumed-by c1) c2)
+  (match* (c1 c2)
+    [('() '()) #t]
+    [(`(#t . ,d1) `(,a2 . ,d2)) ((subsumed-by d1) d2)]
+    [(`(,a1 . ,d1) `(,a2 . ,d2))
+     (and (eqv? a1 a2) ((subsumed-by d1) d2))]
+    [(_ _) #f]))
+
+(define (add-conditions PΓ S instrs h)
+  (let ((conds (map make-condition instrs)))
+    (let ((relevant (filter (subsumed-by conds) (if (null? PΓ) '(()) PΓ))))
+      (begin
+        (map (λ (conds)
+               (let ((v? (hash-ref h conds (λ () #f))))
+                 (if v?
+                     (hash-set! h conds (cons `(,S . ,instrs) v?))
+                     (hash-set! h conds `((,S . ,instrs))))))
+             relevant)
+        h))))
+
+(define (δ->hash δ PΓ)
+  (foldr
+   (λ (x a)
+     (match x
+       [`(,S1 ,v, S2 . ,instrs)
+        (let ((v? (hash-ref a `(,S1 ,v) (λ () #f))))
+          (begin
+            (if v?
+                (hash-set! a `(,S1 ,v)
+                           (add-conditions PΓ S2 instrs v?))
+                (hash-set! a `(,S1 ,v)
+                           (add-conditions
+                            PΓ S2 instrs
+                            (make-hash (map list PΓ)))))
+            a))]))
+   (make-hash)
+   δ))
+
+(define (update-epsilons s δ ks acc)
+  (let ((δ (let ((v? (hash-ref δ `(,s ε) (λ () #f))))
+             (if v? (hash-ref v? (map car ks) (λ () #f)) '()))))
+    (foldr
+     (λ (e a)
+       (match e
+         [`(,s2 . ,stack-conds)
+          (let ((new-stacks (map check-stacks ks stack-conds)))
+                (cons `(,s2 ,new-stacks ,acc) a))]))
+     '()
+     (if δ δ '()))))
+
+(define ((apply-transitions U δ s ks acc) i)
+  (let ((δ (let ((v? (hash-ref δ `(,s ,i) (λ () #f))))
+             (if v? (hash-ref v? (map car ks) (λ () #f)) '()))))
+    (foldr
+     (λ (x l)
+       (match x
+         [`(,s2 . ,stack-conds)
+          (let ((new-stacks (map check-stacks ks stack-conds)))
+            (let ((new-accs (map (λ (u a) (u s i a)) U acc)))
+              (cons `(,s2 ,new-stacks ,new-accs) l)))]))
+     '()
+     (if δ δ '()))))
+
+
+(define (visited? V)
+  (λ (x) (hash-has-key? V x)))
+
+
+(define (all-combinations ls)
+  (cond
+    [(null? ls) '()]
+    [(null? (cdr ls)) (map list (car ls))]
+    [else (let ((V (all-combinations (cdr ls))))
+            (foldr
+             (λ (e a)
+               (append
+                (map (λ (x) (cons e x)) V)
+                a))
+             '()
+             (car ls)))]))
+;; Visited is a hashset as well, and is now global withing the loop
+;; SORRY FOR SIDE-EFFECTS BUTS ITS SO MUCH FASTER
+(define-syntax run
+  (syntax-rules ()
+    ((_ M I stop? A-stop? include? U b f א Π disp?)
+     (match M
+       [(Automaton S F A δ Σ Γ)
+        (let ((δ (δ->hash δ (all-combinations
+                             (map (λ (x) (cons #f x)) Γ))))
+              (update-Q (Fk A Π))
+              (F? (final-state? F))
+              (V (make-hash)))
+          (let loop ((Q (F0 S Γ I)) (A b))
+            (begin
+              (if disp? (displayln Q) void)
+              (match Q
+                ['() A]
+                [(? (λ (x) (A-stop? A))) A]
+                [`(,(? (visited? V)) . ,rest) (loop rest A)]
+                [`((,s ,ks ,(? stop?)) . ,rest) (loop rest A)]
+                [`((,s ,ks ,a) . ,Q)
+                 (begin
+                   (hash-set! V `(,s ,ks ,a) #t)
+                   (let ((A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
+                         (Q (update-Q
+                             Q
+                             (א Σ a)
+                             (apply-transitions U δ s ks a)
+                             (update-epsilons s δ ks a))))
+                     (loop Q A)))]))))]))
     ((_ M I stop? A-stop? include? U b f א)
      (run M I stop? A-stop? include? U b f א 'bfs #f))
     ((_ M I stop? A-stop? include? U b f א disp?)

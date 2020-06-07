@@ -208,14 +208,31 @@ Eid: symbol describing a field of CDR
 
 
 #|
-Documentation for this version (before Σ reduction)
+Documentation on speed development
 
+Before Σ reduction
 > (time (take-words Feature 100))
 cpu time: 192744 real time: 192304 gc time: 12664
 
 After Σ reduction:
 > (time (take-words Feature 100))
 cpu time: 56639 real time: 53815 gc time: 8676
+
+After converting δ and V to a hashmap for run
+> (time (take-words Feature 100))
+cpu time: 18519 real time: 20098 gc time: 7418
+> (time (length (apply-words (take-words Feature 500))))
+cpu time: 40639 real time: 42321 gc time: 16601
+500
+
+After adding stack conditions to hashmap
+> (time (length (apply-words (take-words Feature 100))))
+cpu time: 13992 real time: 14847 gc time: 5618
+100
+> (time (length (apply-words (take-words Feature 500))))
+cpu time: 31778 real time: 33655 gc time: 12394
+500
+
 |#
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Evaluation using Features

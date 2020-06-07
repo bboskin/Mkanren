@@ -15,16 +15,16 @@
     (and
      (member '() A*-Σ50)
      (not (member '() A+-Σ50))
-     (equal? (cdr A*-Σ50) A+-Σ50))
-    (equal? '((a) (b)) (find-words AUB/DFA 100))
-    (equal? (length (find-words AUB*/DFA 2)) 7)
-
-    (accept? AUB•c+*/DFA '())
-    (accept? AUB•c+*/DFA '(a))
-    (accept? AUB•c+*/DFA '(a b c))
-    (not (accept? AUB•c+*/DFA '(a b a c)))
-    (accept? AUB•c+*/DFA '(a a a a b c b c a b c b c b c b c a b c))
-    (not (accept? AUB•c+*/DFA '(a a a a b c b c a b a c b c b c b c a b c)))))
+     (set-equal?? (remove '() A*-Σ50) A+-Σ50)
+     (set-equal?? '((a) (b)) (find-words AUB/DFA 100))
+     (= (length (find-words AUB*/DFA 2)) 7)
+     
+     (accept? AUB•c+*/DFA '())
+     (accept? AUB•c+*/DFA '(a))
+     (accept? AUB•c+*/DFA '(a b c))
+     (not (accept? AUB•c+*/DFA '(a b a c)))
+     (accept? AUB•c+*/DFA '(a a a a b c b c a b c b c b c b c a b c))
+     (not (accept? AUB•c+*/DFA '(a a a a b c b c a b a c b c b c b c a b c))))))
 
 
 
@@ -112,25 +112,25 @@
 
 (if test?
     (begin
-      (if (DFA-tests)
+      (if (time (DFA-tests))
           (displayln "DFA tests passed")
           (error "DFA tests failed"))
       
-      (if (and (CFG-tests)
+      (if (time (and (CFG-tests)
                (and (andmap CFG? CNFs)
-                    (andmap CNF? CNFs)))
+                    (andmap CNF? CNFs))))
           (displayln "CFG->CNF conversion tests passed")
           (error "CFG->CNF conversion tests failed"))
       
-      (if (PDA-tests)
+      (if (time (PDA-tests))
           (displayln "PDA tests passed")
           (error "PDA tests failed"))
       
-      (if (Set-tests)
+      (if (time (Set-tests))
           (displayln "Set operation PDA tests passed")
           (error "Set tests failed"))
       
-      (if (Min-tests)
+      (if (time (Min-tests))
           (displayln "Minimization-tests passed")
           (error "Minimization tests failed")))
     (displayln "all tests skipped"))

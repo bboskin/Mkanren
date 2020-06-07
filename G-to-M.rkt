@@ -50,8 +50,6 @@
            '())])]
     [else (error "Not a valid RE!!")]))
 
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; generating PDAs from CNFs
 
