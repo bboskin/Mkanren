@@ -227,31 +227,25 @@ cpu time: 40639 real time: 42321 gc time: 16601
 
 After adding stack conditions to hashmap
 > (time (length (apply-words (take-words Feature 100))))
-cpu time: 13992 real time: 14847 gc time: 5618
+cpu time: 15848 real time: 16470 gc time: 6077
 100
 > (time (length (apply-words (take-words Feature 500))))
 cpu time: 31778 real time: 33655 gc time: 12394
 500
+> (time (random-word Feature 4))
+cpu time: 22263 real time: 23945 gc time: 7826
+'(filterMichigan? filtervoicemail? selectdur reducemean)
+> (time (random-word Feature 4))
+cpu time: 11421 real time: 14591 gc time: 5576
+'(maprecipient-id selectcaller-id reduceset reducelength)
 
 |#
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Evaluation using Features
 
-
-
-
-;; Filter is just filter, but it takes a tag instead of a λ
-
-;; Because of what we know about where it sits in the grammar,
-
-
-;; Filter : Eid x CDRs -> CDRs
-(define (Filter f t)
-  (let ((f (tag->function f)))
-    (filter f t)))
-
-
-
+;; helpers for map
 (define (add-to-group v a l)
   (match l
     ['() `((,(Label v) ,a))]
@@ -266,6 +260,12 @@ cpu time: 31778 real time: 33655 gc time: 12394
     [`(,a . ,o)
      (add-to-group (cdr (assv eid (cdr a))) a (group-by eid o))]))
 
+
+;; Filter : Eid x CDRs -> CDRs
+(define (Filter f t)
+  (let ((f (tag->function f)))
+    (filter f t)))
+
 ;; Map : CDRTree -> CDRTree
 (define ((Map eid) o)
   (match o
@@ -275,6 +275,7 @@ cpu time: 31778 real time: 33655 gc time: 12394
     [`(,(? Label? e) . ,T)
      `(,e . ,((Map eid) T))]
     [`(,T ...) (map (Map eid) T)]))
+
 
 ;; Select : CDRTree -> ValTree
 (define ((Select eid) o)
@@ -311,6 +312,31 @@ cpu time: 31778 real time: 33655 gc time: 12394
     
     [`(,T ...) (map (Reduce f) T)])) 
 
+
+
+;; putting it all together
+
+(define (filterword? x)
+  (and (symbol? x)
+       (let ((x (symbol->string x)))
+         (and (>= (string-length x) 6)
+              (string=? (substring x 0 6) "filter")))))
+(define (reduceword? x)
+  (and (symbol? x)
+       (let ((x (symbol->string x)))
+         (and (>= (string-length x) 6)
+              (string=? (substring x 0 6) "reduce")))))
+(define (selectword? x)
+  (and (symbol? x)
+       (let ((x (symbol->string x)))
+         (and (>= (string-length x) 6)
+              (string=? (substring x 0 6) "select")))))
+(define (mapword? x)
+  (and (symbol? x)
+       (let ((x (symbol->string x)))
+         (and (>= (string-length x) 3)
+              (string=? (substring x 0 3) "map")))))
+
 (define (apply-word w ls)
   (match w
     ['() ls]
@@ -338,7 +364,8 @@ cpu time: 31778 real time: 33655 gc time: 12394
 (require 2htdp/image)
 (require 2htdp/universe)
 
-(define SQUARE-SIZE 5)
+(define SQUARE-SIZE 2)
+(define SCREEN-SIZE 1000)
 (define (draw-value v)
   (cond
     [(number? v) (square SQUARE-SIZE "solid" "yellow")]
@@ -346,7 +373,7 @@ cpu time: 31778 real time: 33655 gc time: 12394
     [else (square SQUARE-SIZE "solid" "blue")]))
 
 (define (draw-label _)
-  (square SQUARE-SIZE "solid" "brown"))
+  (rectangle SQUARE-SIZE (* 2 SQUARE-SIZE) "solid" "brown"))
 
 (define (draw-blank)
   (square SQUARE-SIZE "solid" "white"))
@@ -368,27 +395,6 @@ cpu time: 31778 real time: 33655 gc time: 12394
               (beside (draw-tree x) (draw-blank) a))
             empty-image
             T)]))
-
-(define (filterword? x)
-  (and (symbol? x)
-       (let ((x (symbol->string x)))
-         (and (>= (string-length x) 6)
-              (string=? (substring x 0 6) "filter")))))
-(define (reduceword? x)
-  (and (symbol? x)
-       (let ((x (symbol->string x)))
-         (and (>= (string-length x) 6)
-              (string=? (substring x 0 6) "reduce")))))
-(define (selectword? x)
-  (and (symbol? x)
-       (let ((x (symbol->string x)))
-         (and (>= (string-length x) 6)
-              (string=? (substring x 0 6) "select")))))
-(define (mapword? x)
-  (and (symbol? x)
-       (let ((x (symbol->string x)))
-         (and (>= (string-length x) 3)
-              (string=? (substring x 0 3) "map")))))
 
 (define (step/draw W)
   (match W
@@ -414,12 +420,12 @@ cpu time: 31778 real time: 33655 gc time: 12394
    12
    "black"))
 (define (animate-eval w)
-  (big-bang `(,CDRs ,w)
+  (car (big-bang `(,CDRs ,w)
     [on-key (λ (x i) (step/draw x))]
     [to-draw (λ (x)
                (overlay
                 (above
                  (draw-word (cadr x))
-                 (rectangle 100 100 "solid" "white")
+                 (rectangle 50 50 "solid" "white")
                  (draw-tree (car x)))
-                (empty-scene 500 500)))]))
+                (empty-scene SCREEN-SIZE SCREEN-SIZE)))])))

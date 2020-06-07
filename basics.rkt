@@ -263,66 +263,56 @@
              relevant)
         h))))
 
-(define (δ->hash δ PΓ)
-  (foldr
-   (λ (x a)
-     (match x
-       [`(,S1 ,v, S2 . ,instrs)
-        (let ((v? (hash-ref a `(,S1 ,v) (λ () #f))))
-          (begin
-            (if v?
-                (hash-set! a `(,S1 ,v)
-                           (add-conditions PΓ S2 instrs v?))
-                (hash-set! a `(,S1 ,v)
-                           (add-conditions
-                            PΓ S2 instrs
-                            (make-hash (map list PΓ)))))
-            a))]))
-   (make-hash)
-   δ))
+(define (δ->hash δ Γ)
+  (let ((PΓ (all-combinations (map (λ (x) (cons #f x)) Γ))))
+    (foldr
+     (λ (x a)
+       (match x
+         [`(,S1 ,v, S2 . ,instrs)
+          (let ((v? (hash-ref a `(,S1 ,v) (λ () #f))))
+            (begin
+              (if v?
+                  (hash-set! a `(,S1 ,v)
+                             (add-conditions PΓ S2 instrs v?))
+                  (hash-set! a `(,S1 ,v)
+                             (add-conditions
+                              PΓ S2 instrs
+                              (make-hash (map list PΓ)))))
+              a))]))
+     (make-hash)
+     δ)))
 
-(define (update-epsilons s δ ks acc)
-  (let ((δ (let ((v? (hash-ref δ `(,s ε) (λ () #f))))
-             (if v? (hash-ref v? (map car ks) (λ () #f)) '()))))
+(define ((apply-transitions U s δ ks acc) i)
+  (let ((δ (let ((v? (hash-ref δ `(,s ,i) (λ () #f))))
+             (if v?
+                 (let ((v? (hash-ref v? (map car ks) (λ () #f))))
+                   (if v? v? '()))
+                 '()))))
     (foldr
      (λ (e a)
-       (match e
-         [`(,s2 . ,stack-conds)
-          (let ((new-stacks (map check-stacks ks stack-conds)))
-                (cons `(,s2 ,new-stacks ,acc) a))]))
+       (let ((new-stacks (map check-stacks ks (cdr e)))
+             (new-acc (if U (map (λ (u a) (u s i a)) U acc) acc)))
+         (cons `(,(car e) ,new-stacks ,new-acc) a)))
      '()
-     (if δ δ '()))))
-
-(define ((apply-transitions U δ s ks acc) i)
-  (let ((δ (let ((v? (hash-ref δ `(,s ,i) (λ () #f))))
-             (if v? (hash-ref v? (map car ks) (λ () #f)) '()))))
-    (foldr
-     (λ (x l)
-       (match x
-         [`(,s2 . ,stack-conds)
-          (let ((new-stacks (map check-stacks ks stack-conds)))
-            (let ((new-accs (map (λ (u a) (u s i a)) U acc)))
-              (cons `(,s2 ,new-stacks ,new-accs) l)))]))
-     '()
-     (if δ δ '()))))
+     δ)))
 
 
-(define (visited? V)
-  (λ (x) (hash-has-key? V x)))
+(define (visited? V) (λ (x) (hash-has-key? V x)))
 
 
 (define (all-combinations ls)
   (cond
     [(null? ls) '()]
     [(null? (cdr ls)) (map list (car ls))]
-    [else (let ((V (all-combinations (cdr ls))))
-            (foldr
-             (λ (e a)
-               (append
-                (map (λ (x) (cons e x)) V)
-                a))
-             '()
-             (car ls)))]))
+    [else
+     (let ((V (all-combinations (cdr ls))))
+       (foldr
+        (λ (e a)
+          (append (map (λ (x) (cons e x)) V) a))
+        '()
+        (car ls)))]))
+
+
 ;; Visited is a hashset as well, and is now global withing the loop
 ;; SORRY FOR SIDE-EFFECTS BUTS ITS SO MUCH FASTER
 (define-syntax run
@@ -330,8 +320,7 @@
     ((_ M I stop? A-stop? include? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
-        (let ((δ (δ->hash δ (all-combinations
-                             (map (λ (x) (cons #f x)) Γ))))
+        (let ((δ (δ->hash δ Γ))
               (update-Q (Fk A Π))
               (F? (final-state? F))
               (V (make-hash)))
@@ -350,8 +339,8 @@
                          (Q (update-Q
                              Q
                              (א Σ a)
-                             (apply-transitions U δ s ks a)
-                             (update-epsilons s δ ks a))))
+                             (apply-transitions U s δ ks a)
+                             ((apply-transitions #f s δ ks a) 'ε))))
                      (loop Q A)))]))))]))
     ((_ M I stop? A-stop? include? U b f א)
      (run M I stop? A-stop? include? U b f א 'bfs #f))
