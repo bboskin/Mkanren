@@ -38,43 +38,44 @@ Eid: symbol describing a field of CDR
 ;; data/functions to work up to defining
 ;; the automaton, which generates features
 
-(define FN-TAGS
-  `(;; filter ops
-    (zero-minutes? ,(λ (x) (eqv? (cdr (assv 'dur (cdr x))) 0)))
+(define FILTER-FNS
+  `((zero-minutes? ,(λ (x) (eqv? (cdr (assv 'dur (cdr x))) 0)))
     (voicemail? ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x)))
                               (cdr (assv 'recipient-id (cdr x))))))
     (half-hour? ,(λ (x) (>= (cdr (assv 'dur (cdr x))) 30)))
     (jack? ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Jack)))
     (ben? ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Ben)))
     (Michigan? (λ (x) (memv (cdr (assv 'loc (cdr x)))
-                            `(Ann-Arbor Detroit DairyTown KerryTown))) )
-    
-    ;; reduce ops
-    (+ ,(λ (x) (foldr + 0 x)))
-    (* ,(λ (x) (foldr * 1 x)))
-    (mean ,(λ (xs) (if (null? xs) 0 (/ (foldr + 0 xs) (length xs)))) 0)
-    (length ,length 0)
-    (set ,(λ (x) (foldr set-cons '() x)) ())))
+                            `(Ann-Arbor Detroit DairyTown KerryTown))) )))
 
-(define FILTER-OPS
-  '(zero-minutes?
-    ;voicemail?
-    ;half-hour?
-    ;jack?
-    ;ben?
-    ;Michigan?
-    ))
+(define REDUCE-FNS
+  `((+ ,(λ (x) (foldr + 0 x)) Nats Nat)
+    (* ,(λ (x) (foldr * 1 x)) Nats Nat)
+    (mean ,(λ (xs) (if (null? xs) 0 (/ (foldr + 0 xs) (length xs))))
+          Nats Nat)
+    (length ,length Set Nat)
+    (set ,(λ (x) (foldr set-cons '() x)) Set Set)))
+
+(define FNS (append FILTER-FNS REDUCE-FNS))
+
+(define FILTER-OPS (map car FILTER-FNS))
 
 ;; used by the typed version
-(define REDUCE-NATS->NAT-OPS '(+ * mean))
-(define REDUCE-SET->NAT-OPS '(length))
-(define REDUCE-SET->SET-OPS '(set))
+(define REDUCE-NATS->NAT-OPS
+  (map car
+       (filter (λ (x) (equal? (cddr x) `(Nats Nat))) REDUCE-FNS)))
+(define REDUCE-SET->NAT-OPS
+  (map car
+       (filter (λ (x) (equal? (cddr x) `(Set Nat))) REDUCE-FNS)))
+(define REDUCE-SET->SET-OPS
+  (map car
+       (filter (λ (x) (equal? (cddr x) `(Set Set))) REDUCE-FNS)))
 
 ;; used by untyped version
-(define REDUCE-OPS '(length #;set))
+(define REDUCE-OPS (map car REDUCE-FNS))
 
 (define (tag->function t)
-  (let ((f (assv t FN-TAGS)))
+  (let ((f (assv t FNS)))
     (if f (cadr f) #f)))
 
 
@@ -112,12 +113,9 @@ Eid: symbol describing a field of CDR
     (loc . ,(list-ref LOCS (random (length LOCS))))))
 
 
-(define FIELDS
-
-  (map car (cdr (random-CDR #f))))
-
-
+(define FIELDS (map car (cdr (random-CDR #f))))
 (define NATFIELDS '(dur))
+
 (define field? (λ (x) (memv x FIELDS)))
 (define (random-CDRs k)
   (build-list k random-CDR))
@@ -139,11 +137,9 @@ Eid: symbol describing a field of CDR
              (and (list? x)
                   (or (andmap number? x)
                       (andmap symbol? x)
-                      (andmap pr? x)))
-             ))))
+                      (andmap pr? x)))))))
 
-(struct Label [v]
-  #:transparent)
+(struct Label [v] #:transparent)
 
 (define CDR?
   (λ (x)
@@ -186,13 +182,17 @@ Eid: symbol describing a field of CDR
       (ReduceNats->NatOp -> . ,(map (λ (x) `',x) REDUCE-NATS->NAT-OPS))
       (ReduceSet->NatOp -> . ,(map (λ (x) `',x) REDUCE-SET->NAT-OPS))
       (ReduceSet->SetOp -> . ,(map (λ (x) `',x) REDUCE-SET->SET-OPS))
-      
-      
       (EidNat -> . ,(map (λ (x) `',x) NATFIELDS))
       (Eid -> . ,(map (λ (x) `',x) FIELDS))))))
 
+#|
+Documentation for this version (before Σ reduction)
+
+> (time (take-words Feature 100))
+cpu time: 192744 real time: 192304 gc time: 12664
 
 
+|#
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Evaluation using Features
 
@@ -282,7 +282,9 @@ Eid: symbol describing a field of CDR
 
 
 (define (apply-words ws)
-  (map (λ (x) (begin (displayln x) (apply-word x CDRs))) ws))
+  (map (λ (x) (begin
+                #;(displayln x)
+                (apply-word x CDRs))) ws))
 
 ;;;;;;;;;;;;;;;;
 ;; animation
@@ -291,7 +293,7 @@ Eid: symbol describing a field of CDR
 (require 2htdp/image)
 (require 2htdp/universe)
 
-(define SQUARE-SIZE 10)
+(define SQUARE-SIZE 5)
 (define (draw-value v)
   (cond
     [(number? v) (square SQUARE-SIZE "solid" "yellow")]
@@ -301,31 +303,26 @@ Eid: symbol describing a field of CDR
 (define (draw-label _)
   (square SQUARE-SIZE "solid" "brown"))
 
+(define (draw-blank)
+  (square SQUARE-SIZE "solid" "white"))
 (define (draw-CDR v)
   (square SQUARE-SIZE "solid" "black"))
 
 (define (draw-tree T)
+
   (match T
+    [#f empty-image]
     ['() empty-image]
     [(? Value? v) (draw-value v)]
-    [`(,(? Value? v) ...)
-     (foldr (λ (x a)
-              (beside (draw-value x) a))
-            empty-image
-            T)]
-    [`(,(? CDR? c) ...)
-     (foldr (λ (x a)
-              (beside (draw-CDR x) a))
-            empty-image
-            T)]
+    [(? CDR? c) (draw-CDR c)]
     [`(,(? Label? e) . ,T)
      (above (draw-label e)
             (draw-tree T))]
-    
-    [`(,T ...) (foldr (λ (x a)
-                        (beside (draw-tree x) a))
-                      empty-image
-                      T)]))
+    [`(,T ...)
+     (foldr (λ (x a)
+              (beside (draw-tree x) (draw-blank) a))
+            empty-image
+            T)]))
 
 (define (step W)
   (match W
@@ -341,9 +338,19 @@ Eid: symbol describing a field of CDR
        (list ((Reduce f) ls) w))]
     [else (error "Invalid word")]))
 
+
+(define (draw-word w)
+  (text
+   (foldr (λ (x a) (string-append (symbol->string x) "" a)) "" w)
+   12
+   "black"))
 (define (animate-eval w)
   (big-bang `(,CDRs ,w)
-    [on-tick step 1]
+    [on-key (λ (x i) (step x))]
     [to-draw (λ (x)
-               (overlay (draw-tree (car x))
-                        (empty-scene 500 500)))]))
+               (overlay
+                (above
+                 (draw-word (cadr x))
+                 (rectangle 100 100 "solid" "white")
+                 (draw-tree (car x)))
+                (empty-scene 500 500)))]))
