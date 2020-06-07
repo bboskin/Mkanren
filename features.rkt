@@ -45,7 +45,7 @@ Eid: symbol describing a field of CDR
     (half-hour? ,(λ (x) (>= (cdr (assv 'dur (cdr x))) 30)))
     (jack? ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Jack)))
     (ben? ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Ben)))
-    (Michigan? (λ (x) (memv (cdr (assv 'loc (cdr x)))
+    (Michigan? ,(λ (x) (memv (cdr (assv 'loc (cdr x)))
                             `(Ann-Arbor Detroit DairyTown KerryTown))) )))
 
 (define REDUCE-FNS
@@ -160,7 +160,7 @@ Eid: symbol describing a field of CDR
       (ReduceOp -> . ,(map (λ (x) `',x) REDUCE-OPS))
       (Eid -> . ,(map (λ (x) `',x) FIELDS))))))
 
-(define Feature
+(define Feature-2x
   (CNF->PDA
    (CFG->CNF
     `((Feature ->
@@ -185,13 +185,37 @@ Eid: symbol describing a field of CDR
       (EidNat -> . ,(map (λ (x) `',x) NATFIELDS))
       (Eid -> . ,(map (λ (x) `',x) FIELDS))))))
 
+(define Feature
+  (CNF->PDA
+   (CFG->CNF
+    `((Feature ->
+               (Filter* GNats ReduceNats->Nat)
+               (Filter* GSet ReduceSet->Nat))
+      (Filter* -> ε (Filter Filter*))
+      (GNats -> SelectNats
+             (Map GNats ReduceNats->Nat)
+             (Map GSet ReduceSet->Nat))
+      (GSet -> Select
+            (Map GSet ReduceSet->Set)
+            (Map GNats ReduceSet->Set))
+      (SelectNats -> . ,(map (λ (x) `',(symbol-append 'select x)) NATFIELDS))
+      (Select -> . ,(map (λ (x) `',(symbol-append 'select x)) FIELDS))
+      (Map -> . ,(map (λ (x) `',(symbol-append 'map x)) FIELDS))
+      (Filter -> . ,(map (λ (x) `',(symbol-append 'filter x)) FILTER-OPS))
+      (ReduceNats->Nat -> . ,(map (λ (x) `',(symbol-append 'reduce x)) REDUCE-NATS->NAT-OPS))
+      (ReduceSet->Nat -> . ,(map (λ (x) `',(symbol-append 'reduce x)) REDUCE-SET->NAT-OPS))
+      (ReduceSet->Set -> . ,(map (λ (x) `',(symbol-append 'reduce x)) REDUCE-SET->SET-OPS))))))
+
+
 #|
 Documentation for this version (before Σ reduction)
 
 > (time (take-words Feature 100))
 cpu time: 192744 real time: 192304 gc time: 12664
 
-
+After Σ reduction:
+> (time (take-words Feature 100))
+cpu time: 56639 real time: 53815 gc time: 8676
 |#
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Evaluation using Features
@@ -273,18 +297,22 @@ cpu time: 192744 real time: 192304 gc time: 12664
 (define (apply-word w ls)
   (match w
     ['() ls]
-    [`(filter ,t ,w ...)  (apply-word w (Filter t ls))]
-    [`(map ,t ,w ...)     (apply-word w ((Map t) ls))]
-    [`(select ,t ,w ...)  (apply-word w ((Select t) ls))]
-    [`(reduce ,f ,w ...)  (let ((f (tag->function f)))
-                            (apply-word w ((Reduce f) ls)))]
-    [else                 (error "Invalid word")]))
-
+    [`(,(? filterword? f) . ,w)
+     (let ((t (string->symbol (substring (symbol->string f) 6))))
+       (apply-word w (Filter t ls)))]
+    [`(,(? mapword? f) . ,w)
+     (let ((t (string->symbol (substring (symbol->string f) 3))))
+       (apply-word w ((Map t) ls)))]
+    [`(,(? selectword? f) . ,w)
+     (let ((t (string->symbol (substring (symbol->string f) 6))))
+       (apply-word w ((Select t) ls)))]
+    [`(,(? reduceword? f) . ,w)
+     (let ((f (tag->function (string->symbol (substring (symbol->string f) 6)))))
+       (apply-word w ((Reduce f) ls)))]
+    [else (error (format "Invalid word ~s" w))]))
 
 (define (apply-words ws)
-  (map (λ (x) (begin
-                #;(displayln x)
-                (apply-word x CDRs))) ws))
+  (map (λ (x) (begin (apply-word x CDRs))) ws))
 
 ;;;;;;;;;;;;;;;;
 ;; animation
@@ -324,17 +352,41 @@ cpu time: 192744 real time: 192304 gc time: 12664
             empty-image
             T)]))
 
-(define (step W)
+(define (filterword? x)
+  (and (symbol? x)
+       (let ((x (symbol->string x)))
+         (and (>= (string-length x) 6)
+              (string=? (substring x 0 6) "filter")))))
+(define (reduceword? x)
+  (and (symbol? x)
+       (let ((x (symbol->string x)))
+         (and (>= (string-length x) 6)
+              (string=? (substring x 0 6) "reduce")))))
+(define (selectword? x)
+  (and (symbol? x)
+       (let ((x (symbol->string x)))
+         (and (>= (string-length x) 6)
+              (string=? (substring x 0 6) "select")))))
+(define (mapword? x)
+  (and (symbol? x)
+       (let ((x (symbol->string x)))
+         (and (>= (string-length x) 3)
+              (string=? (substring x 0 3) "map")))))
+
+(define (step/draw W)
   (match W
     [`(,ls ()) (list ls '())]
-    [`(,ls (filter ,t ,w ...))
-     (list (Filter t ls) w)]
-    [`(,ls (map ,t ,w ...))
-     (list ((Map t) ls) w)]
-    [`(,ls (select ,t ,w ...))
-     (list ((Select t) ls) w)]
-    [`(,ls (reduce ,f ,w ...))
-     (let ((f (tag->function f)))
+    [`(,ls (,(? filterword? f) . ,w))
+     (let ((t (string->symbol (substring (symbol->string f) 6))))
+       (list (Filter t ls) w))]
+    [`(,ls (,(? mapword? f) . ,w))
+     (let ((t (string->symbol (substring (symbol->string f) 3))))
+       (list ((Map t) ls) w))]
+    [`(,ls (,(? selectword? f) . ,w))
+     (let ((t (string->symbol (substring (symbol->string f) 6))))
+       (list ((Select t) ls) w))]
+    [`(,ls (,(? reduceword? f) . ,w))
+     (let ((f (tag->function (string->symbol (substring (symbol->string f) 6)))))
        (list ((Reduce f) ls) w))]
     [else (error "Invalid word")]))
 
@@ -346,7 +398,7 @@ cpu time: 192744 real time: 192304 gc time: 12664
    "black"))
 (define (animate-eval w)
   (big-bang `(,CDRs ,w)
-    [on-key (λ (x i) (step x))]
+    [on-key (λ (x i) (step/draw x))]
     [to-draw (λ (x)
                (overlay
                 (above

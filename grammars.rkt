@@ -206,8 +206,18 @@
           (let* ((S0 (caar G))
                  (new-S0 (gensym S0))
                  (G (remove-epsilons new-S0 `((,new-S0 -> ,S0) ,@G) '())))
-            (consolidate-again (consolidate-CNF (CNF->CNF* G '() '() #f)))))))
+            (organize-rules (consolidate-again (consolidate-CNF (CNF->CNF* G '() '() #f))))))))
 
+
+(define (organize-rules G)
+  (map
+   (λ (x)
+     (match x
+       [`(,Sym -> . ,xs)
+        (let ((S (filter (λ (x) (match x [`',x #t] [else #f])) xs))
+              (R (filter (λ (x) (match x [`',x #f] [else #t])) xs)))
+          `(,Sym -> . ,(append S R)))]))
+   G))
 (define (consolidate-again G)
   (let loop ((G (cdr G))
              (ans (list (car G))))
