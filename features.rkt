@@ -5,6 +5,8 @@
   "queries.rkt"
   "G-to-M.rkt"
   "grammars.rkt")
+
+
 #|
 Relevant datatypes as we progress through our function.
 
@@ -31,9 +33,7 @@ ValTree: A nested list of the form
 Value: A number, symbol, or `(,Value ...)
 
 Eid: symbol describing a field of CDR
-
 |#
-
 
 ;; data/functions to work up to defining
 ;; the automaton, which generates features
@@ -60,7 +60,6 @@ Eid: symbol describing a field of CDR
 
 (define FILTER-OPS (map car FILTER-FNS))
 
-;; used by the typed version
 (define REDUCE-NATS->NAT-OPS
   (map car
        (filter (λ (x) (equal? (cddr x) `(Nats Nat))) REDUCE-FNS)))
@@ -70,9 +69,6 @@ Eid: symbol describing a field of CDR
 (define REDUCE-SET->SET-OPS
   (map car
        (filter (λ (x) (equal? (cddr x) `(Set Set))) REDUCE-FNS)))
-
-;; used by untyped version
-(define REDUCE-OPS (map car REDUCE-FNS))
 
 (define (tag->function t)
   (let ((f (assv t FNS)))
@@ -100,7 +96,7 @@ Eid: symbol describing a field of CDR
   (cons (add1 (random 12))
         (add1 (random 60))))
 
-(define DUR-MAX 10)
+(define DUR-MAX 45)
 
 
 (define (random-CDR _)
@@ -109,7 +105,7 @@ Eid: symbol describing a field of CDR
     (recipient-id . ,(list-ref CALLERS (random (length CALLERS))))
     (date . ,(random-date))
     (time . ,(random-time))
-    (dur . ,(random  DUR-MAX))
+    (dur . ,(+ 15 (random  DUR-MAX)))
     (loc . ,(list-ref LOCS (random (length LOCS))))))
 
 
@@ -147,43 +143,9 @@ Eid: symbol describing a field of CDR
          (eqv? (car x) 'CDR)
          (andmap cons? (cdr x)))))
 
-(define CDRs (random-CDRs 100))
+(define CDRs (random-CDRs 50))
 
-(define Feature-notypes
-  (CNF->PDA
-   (CFG->CNF
-    `((Feature -> (Filter* G Reduce+))
-      (Filter* -> ε ('filter FilterOp Filter*))
-      (Reduce+ -> ('reduce ReduceOp) ('reduce ReduceOp Reduce+))
-      (G -> ('select Eid) ('map Eid G 'reduce ReduceOp))
-      (FilterOp -> . ,(map (λ (x) `',x) FILTER-OPS))
-      (ReduceOp -> . ,(map (λ (x) `',x) REDUCE-OPS))
-      (Eid -> . ,(map (λ (x) `',x) FIELDS))))))
 
-(define Feature-2x
-  (CNF->PDA
-   (CFG->CNF
-    `((Feature ->
-               (Filter* GNats 'reduce ReduceNats->NatOp)
-               (Filter* GSet 'reduce ReduceSet->NatOp))
-      (Filter* -> ε ('filter FilterOp Filter*))
-      (GNats ->
-            ('select EidNat)
-            ('map Eid GNats 'reduce ReduceNats->NatOp)
-            ('map Eid GSet 'reduce ReduceSet->NatOp))
-      
-      (GSet ->
-            ('select Eid)
-            ('map Eid GSet 'reduce ReduceSet->SetOp)
-            ('map Eid GNats 'reduce ReduceSet->SetOp))
-      
-      
-      (FilterOp -> . ,(map (λ (x) `',x) FILTER-OPS))
-      (ReduceNats->NatOp -> . ,(map (λ (x) `',x) REDUCE-NATS->NAT-OPS))
-      (ReduceSet->NatOp -> . ,(map (λ (x) `',x) REDUCE-SET->NAT-OPS))
-      (ReduceSet->SetOp -> . ,(map (λ (x) `',x) REDUCE-SET->SET-OPS))
-      (EidNat -> . ,(map (λ (x) `',x) NATFIELDS))
-      (Eid -> . ,(map (λ (x) `',x) FIELDS))))))
 
 (define Feature
   (CNF->PDA
@@ -218,7 +180,7 @@ After Σ reduction:
 > (time (take-words Feature 100))
 cpu time: 56639 real time: 53815 gc time: 8676
 
-After converting δ and V to a hashmap for run
+After converting δ and V to hashmaps for run
 > (time (take-words Feature 100))
 cpu time: 18519 real time: 20098 gc time: 7418
 > (time (length (apply-words (take-words Feature 500))))
@@ -238,12 +200,36 @@ cpu time: 22263 real time: 23945 gc time: 7826
 > (time (random-word Feature 4))
 cpu time: 11421 real time: 14591 gc time: 5576
 '(maprecipient-id selectcaller-id reduceset reducelength)
+> (time (take-words Feature 750))
+cpu time: 4603030 real time: 4528962 gc time: 3597575
+
+
+After splitting up queue
+> (time (length (apply-words (take-words Feature 100))))
+cpu time: 3700 real time: 4473 gc time: 1926
+
+> (time (length (apply-words (take-words Feature 500))))
+cpu time: 13710 real time: 16123 gc time: 6776
+500
+> (time (begin (length (apply-words (take-words Feature 750))) #t))
+cpu time: 688109 real time: 715061 gc time: 502244
+> (time (begin (length (apply-words (take-words Feature 1000))) #t))
+cpu time: 884246 real time: 915357 gc time: 664900
+
+
+Making epsilons DFS. Time has gotten SUPER SMALL but gc time blew up
+
+> (time (begin (apply-words (take-words Feature 500)) #t))
+cpu time: 1258 real time: 1433 gc time: 355
+> (time (length (apply-words (take-words Feature 1000))))
+cpu time: 126438 real time: 119443 gc time: 55456
+1000
 
 |#
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Evaluation using Features
+;; Evaluation of CDRs using Features
 
 ;; helpers for map
 (define (add-to-group v a l)
@@ -263,8 +249,7 @@ cpu time: 11421 real time: 14591 gc time: 5576
 
 ;; Filter : Eid x CDRs -> CDRs
 (define (Filter f t)
-  (let ((f (tag->function f)))
-    (filter f t)))
+  (filter (tag->function f) t))
 
 ;; Map : CDRTree -> CDRTree
 (define ((Map eid) o)
@@ -291,8 +276,6 @@ cpu time: 11421 real time: 14591 gc time: 5576
 ;; Reduce : ValTree -> ValTree
 (define ((Reduce f) o)
   (match o
-    [#f #f]
-    ['() #f]
     [(? Value? v) (if (not (list? v)) (f `(,v)) (f v))]
     [`(,(? Value? v) ...) (f v)]
     [`(,(? Label? e) ,(? Value? v) ...) (f v)]
@@ -303,13 +286,10 @@ cpu time: 11421 real time: 14591 gc time: 5576
        ...)
      (map f (cons v vs))]
     [`(,(? Label? e)
-       (,(? Label? l1) ,(? Label? l2) ,(? Value? v) ...)
+       (,(? Label? l1) ,(? Label? l2) ,(? Value? vs) ...)
        ...)
-
-     
-     `(,e ,(f v) ...)]
+     `(,e . ,(map (λ (x) (f (cddr x))) (cdr o)))]
     [`(,(? Label? e) . ,T) `(,e . ,((Reduce f) T))]
-    
     [`(,T ...) (map (Reduce f) T)])) 
 
 
@@ -357,14 +337,16 @@ cpu time: 11421 real time: 14591 gc time: 5576
 (define (apply-words ws)
   (map (λ (x) (begin (apply-word x CDRs))) ws))
 
+(define (eval w)
+  (apply-word w CDRs))
+
 ;;;;;;;;;;;;;;;;
 ;; animation
-
 
 (require 2htdp/image)
 (require 2htdp/universe)
 
-(define SQUARE-SIZE 2)
+(define SQUARE-SIZE 5)
 (define SCREEN-SIZE 1000)
 (define (draw-value v)
   (cond
@@ -419,6 +401,7 @@ cpu time: 11421 real time: 14591 gc time: 5576
    (foldr (λ (x a) (string-append (symbol->string x) "" a)) "" w)
    12
    "black"))
+
 (define (animate-eval w)
   (car (big-bang `(,CDRs ,w)
     [on-key (λ (x i) (step/draw x))]
@@ -429,3 +412,49 @@ cpu time: 11421 real time: 14591 gc time: 5576
                  (rectangle 50 50 "solid" "white")
                  (draw-tree (car x)))
                 (empty-scene SCREEN-SIZE SCREEN-SIZE)))])))
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;
+;; Old grammars kept for posterity
+
+#;
+(define REDUCE-OPS (map car REDUCE-FNS))
+
+#;
+(define Feature-notypes
+  (CNF->PDA
+   (CFG->CNF
+    `((Feature -> (Filter* G Reduce+))
+      (Filter* -> ε ('filter FilterOp Filter*))
+      (Reduce+ -> ('reduce ReduceOp) ('reduce ReduceOp Reduce+))
+      (G -> ('select Eid) ('map Eid G 'reduce ReduceOp))
+      (FilterOp -> . ,(map (λ (x) `',x) FILTER-OPS))
+      (ReduceOp -> . ,(map (λ (x) `',x) REDUCE-OPS))
+      (Eid -> . ,(map (λ (x) `',x) FIELDS))))))
+
+#;(define Feature-2x
+  (CNF->PDA
+   (CFG->CNF
+    `((Feature ->
+               (Filter* GNats 'reduce ReduceNats->NatOp)
+               (Filter* GSet 'reduce ReduceSet->NatOp))
+      (Filter* -> ε ('filter FilterOp Filter*))
+      (GNats ->
+            ('select EidNat)
+            ('map Eid GNats 'reduce ReduceNats->NatOp)
+            ('map Eid GSet 'reduce ReduceSet->NatOp))
+      
+      (GSet ->
+            ('select Eid)
+            ('map Eid GSet 'reduce ReduceSet->SetOp)
+            ('map Eid GNats 'reduce ReduceSet->SetOp))
+      
+      
+      (FilterOp -> . ,(map (λ (x) `',x) FILTER-OPS))
+      (ReduceNats->NatOp -> . ,(map (λ (x) `',x) REDUCE-NATS->NAT-OPS))
+      (ReduceSet->NatOp -> . ,(map (λ (x) `',x) REDUCE-SET->NAT-OPS))
+      (ReduceSet->SetOp -> . ,(map (λ (x) `',x) REDUCE-SET->SET-OPS))
+      (EidNat -> . ,(map (λ (x) `',x) NATFIELDS))
+      (Eid -> . ,(map (λ (x) `',x) FIELDS))))))

@@ -118,15 +118,6 @@
 ;; Stacks 
 (define (stack-empty? k) (equal? k '(#f)))
 (define (all-empty? ks) (andmap stack-empty? ks))
-(define (check-stacks ks ms)
-  (match* (ks ms)
-    [('() _) #f]
-    [(`(,s . ,ks) `(pop on #t push ,vs))
-     (append vs (cons s ks))]
-    [(`(,s . ,ks) `(pop on ,γ push ,vs))
-     (and (eqv? s γ) (append vs ks))]
-    [(`(,s . ,ks) 'preserve-stack)
-     (cons s ks)]))
 
 
 ;; symbols allowed to part of Σ
@@ -144,92 +135,6 @@
 (define id (λ (x) x))
 
 (define ((final-state? F) s) (and (memv s F)))
-
-
-;; initializing/updating the frontier
-(define (F0 S Γ I) `((,S ,(build-list (length Γ) (λ (_) '(#f))) ,I)))
-
-(define (Fk A search)
-  (λ (old L δ ε)
-    (match search
-      ['dfs (append (foldr append '() (map δ L)) ε old)]
-      ['bfs (append old ε (foldr append '() (map δ L)))]
-      ['shuff (append old (shuffle (append ε (foldr append '() (map δ L)))))])))
-
-
-#|
-(define (update-epsilons s δ ks acc)
-  (foldr
-   (λ (t a)
-     (match t
-       [`(,s1 ε ,s2 . ,stack-conds)
-        (if (and (eqv? s s1))
-            (let ((new-stacks (map check-stacks ks stack-conds)))
-              (if (andmap id new-stacks)
-                  (cons `(,s2 ,new-stacks ,acc) a)
-                  a))
-            a)]
-       [else a]))
-   '()
-   δ))
-
-(define ((apply-transitions U δ s ks acc) i)
-  (foldr
-   (λ (t a)
-     (match t
-       [`(,s1 ε ,s2 . ,stack-conds) a]
-       [`(,s1 ,(? terminal? v) ,s2 . ,stack-conds)
-        (if (and (eqv? s s1) (eqv? i v))
-            (let ((new-stacks (map check-stacks ks stack-conds))
-                  (new-accs (map (λ (u a) (u s i a)) U acc)))
-              (if (andmap id new-stacks)
-                  `((,s2 ,new-stacks ,new-accs) . ,a)
-                  a))
-            a)]
-       ;; users can define transitions using more general conditions
-       ;; if they so desire. Automatically generated machines don't use this.
-       [`(,s1 ,(? procedure? cond) ,s2 . ,stack-conds)
-        (if (and (eqv? s s1) (cond i))
-            (let ((new-stacks (map check-stacks ks stack-conds))
-                  (new-accs (map (λ (u a) (u s i a)) U acc)))
-              (if (andmap id new-stacks)
-                  `((,s2 ,new-stacks ,new-accs) . ,a)
-                  a))
-            a)]))
-   '()
-   δ))
-
-
-(define-syntax run
-  (syntax-rules ()
-    ((_ M I stop? A-stop? include? U b f א Π disp?)
-     (match M
-       [(Automaton S F A δ Σ Γ)
-        (let ((update-Q (Fk A Π))
-              (F? (final-state? F)))
-          (let loop ((Q (F0 S Γ I)) (V '()) (A b))
-            (begin
-              (if disp? (displayln Q) void)
-              (match Q
-                ['() A]
-                [(? (λ (x) (A-stop? A))) A]
-                [`(,(? (member-of V)) . ,rest) (loop rest V A)]
-                [`((,s ,ks ,(? stop?)) . ,rest) (loop rest V A)]
-                [`((,s ,ks ,a) . ,Q)
-                 (let ((V `((,s ,ks ,a) . ,V))
-                       (A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
-                       (Q (update-Q
-                           Q
-                           (א Σ a)
-                           (apply-transitions U δ s ks a)
-                           (update-epsilons s δ ks a))))
-                   (loop Q V A))]))))]))
-    ((_ M I stop? A-stop? include? U b f א)
-     (run M I stop? A-stop? include? U b f א 'bfs #f))
-    ((_ M I stop? A-stop? include? U b f א disp?)
-     (run M I stop? A-stop? include? U b f א 'bfs disp?))))
-|#
-
 
 
 
@@ -282,6 +187,16 @@
      (make-hash)
      δ)))
 
+(define (check-stacks ks ms)
+  (match* (ks ms)
+    [('() _) #f]
+    [(`(,s . ,ks) `(pop on #t push ,vs))
+     (append vs (cons s ks))]
+    [(`(,s . ,ks) `(pop on ,γ push ,vs))
+     (and (eqv? s γ) (append vs ks))]
+    [(`(,s . ,ks) 'preserve-stack)
+     (cons s ks)]))
+
 (define ((apply-transitions U s δ ks acc) i)
   (let ((δ (let ((v? (hash-ref δ `(,s ,i) (λ () #f))))
              (if v?
@@ -313,35 +228,61 @@
         (car ls)))]))
 
 
-;; Visited is a hashset as well, and is now global withing the loop
+;; Visited is a hashset as well, and is now global within the loop
 ;; SORRY FOR SIDE-EFFECTS BUTS ITS SO MUCH FASTER
+;; Now using separate queue for states derived from epsilons and other symbols
+
+
+;; initializing/updating the frontier
+(define (F0 S Γ I) `((,S ,(build-list (length Γ) (λ (_) '(#f))) ,I)))
+
+(define (Fk A search)
+  (λ (old L δ ε)
+    (match search
+      ['dfs (append (foldr append '() (map δ L)) ε old)]
+      ['bfs (append old ε (foldr append '() (map δ L)))]
+      ['shuff (append old (shuffle (append ε (foldr append '() (map δ L)))))])))
+
+(define ((step Σ F? include? stop? f update-Q א U δ) Q A V)
+  (match Q
+    ['() (values '() '() '() A)]
+    [`((,s ,ks ,(? stop?)) . ,Q) (values '() '() Q A)]
+    [`(,(? (visited? V)) . ,Q) (values '() '() Q A)]
+    [`((,s ,ks ,a) . ,Q)
+     (begin
+       (hash-set! V `(,s ,ks ,a) #t)
+       (let ((A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
+             (Q1n (foldr append '() (map (apply-transitions U s δ ks a) (א Σ a))))
+             (Q2n ((apply-transitions #f s δ ks a) 'ε)))
+         (values Q1n Q2n Q A)))]))
+
 (define-syntax run
   (syntax-rules ()
     ((_ M I stop? A-stop? include? U b f א Π disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
-        (let ((δ (δ->hash δ Γ))
-              (update-Q (Fk A Π))
-              (F? (final-state? F))
-              (V (make-hash)))
-          (let loop ((Q (F0 S Γ I)) (A b))
+        (let* ((δ (δ->hash δ Γ))
+               (update-Q (Fk A Π))
+               (F? (final-state? F))
+               (V (make-hash))
+               (proceed (step Σ F? include? stop? f update-Q א U δ)))
+          (let loop ((Q1 (F0 S Γ I))
+                     (Q2 '())
+                     (A b))
             (begin
-              (if disp? (displayln Q) void)
-              (match Q
-                ['() A]
-                [(? (λ (x) (A-stop? A))) A]
-                [`(,(? (visited? V)) . ,rest) (loop rest A)]
-                [`((,s ,ks ,(? stop?)) . ,rest) (loop rest A)]
-                [`((,s ,ks ,a) . ,Q)
-                 (begin
-                   (hash-set! V `(,s ,ks ,a) #t)
-                   (let ((A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
-                         (Q (update-Q
-                             Q
-                             (א Σ a)
-                             (apply-transitions U s δ ks a)
-                             ((apply-transitions #f s δ ks a) 'ε))))
-                     (loop Q A)))]))))]))
+              (if disp? (begin (displayln Q1) (displayln "")(displayln Q2)) void)
+              
+              (cond
+                [(A-stop? A) A]
+                [(and (null? Q1) (null? Q2)) A]
+                [(null? Q1)
+                 ;; epsilons are DFS
+                 (let-values (((Q1n Q2n Q2 A) (proceed Q2 A V)))
+                    (loop Q1n (append Q2 Q2n) A))]
+                [else
+                 ;; but symbols are BFS!
+                 (let-values (((Q1n Q2n Q1 A) (proceed Q1 A V)))
+                    (loop (append Q1 Q1n) (append Q2n Q2) A))]))))]))
     ((_ M I stop? A-stop? include? U b f א)
      (run M I stop? A-stop? include? U b f א 'bfs #f))
     ((_ M I stop? A-stop? include? U b f א disp?)

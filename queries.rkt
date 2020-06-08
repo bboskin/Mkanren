@@ -66,7 +66,7 @@
       (list (λ (_ i a) (snoc i a))
             )
       '()
-      (λ (a A) (set-cons (car a) A))
+      (λ (a A) (cons (car a) A))
       (λ (Σ _) Σ)
       'bfs
       disp?)]))
