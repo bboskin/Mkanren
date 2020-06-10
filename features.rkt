@@ -153,7 +153,7 @@ Eid: symbol describing a field of CDR
     `((Feature ->
                (Filter* GNats ReduceNats->Nat)
                (Filter* GSet ReduceSet->Nat))
-      (Filter* -> ε (Filter Filter*))
+      (Filter* -> ε #;(Filter Filter*))
       (GNats -> SelectNats
              (Map GNats ReduceNats->Nat)
              (Map GSet ReduceSet->Nat))
@@ -203,7 +203,6 @@ cpu time: 11421 real time: 14591 gc time: 5576
 > (time (take-words Feature 750))
 cpu time: 4603030 real time: 4528962 gc time: 3597575
 
-
 After splitting up queue
 > (time (length (apply-words (take-words Feature 100))))
 cpu time: 3700 real time: 4473 gc time: 1926
@@ -217,13 +216,23 @@ cpu time: 688109 real time: 715061 gc time: 502244
 cpu time: 884246 real time: 915357 gc time: 664900
 
 
-Making epsilons DFS. Time has gotten SUPER SMALL but gc time blew up
+Making epsilons DFS. Time has gotten SUPER SMALL wtf
 
 > (time (begin (apply-words (take-words Feature 500)) #t))
-cpu time: 1258 real time: 1433 gc time: 355
+cpu time: 1883 real time: 1895 gc time: 587
 > (time (length (apply-words (take-words Feature 1000))))
-cpu time: 126438 real time: 119443 gc time: 55456
+cpu time: 221361 real time: 215320 gc time: 94911
 1000
+
+
+
+;; takes a while (25 seconds) but here is finally what I think is
+;; an interesting feature
+(Filter* was removed from grammar when this was generated)
+
+> (time (random-word Feature 5))
+cpu time: 25207 real time: 26206 gc time: 8253
+'(maprecipient-id maptime selectdur reducelength reduceset reducelength)
 
 |#
 
@@ -337,8 +346,7 @@ cpu time: 126438 real time: 119443 gc time: 55456
 (define (apply-words ws)
   (map (λ (x) (begin (apply-word x CDRs))) ws))
 
-(define (eval w)
-  (apply-word w CDRs))
+(define (eval w) (apply-word w CDRs))
 
 ;;;;;;;;;;;;;;;;
 ;; animation

@@ -266,23 +266,23 @@
                (F? (final-state? F))
                (V (make-hash))
                (proceed (step Σ F? include? stop? f update-Q א U δ)))
-          (let loop ((Q1 (F0 S Γ I))
-                     (Q2 '())
+          (let loop ((Qsym (F0 S Γ I))
+                     (Qε '())
                      (A b))
             (begin
-              (if disp? (begin (displayln Q1) (displayln "")(displayln Q2)) void)
+              (if disp? (begin (displayln Qsym) (displayln "")(displayln Qε)) void)
               
               (cond
                 [(A-stop? A) A]
-                [(and (null? Q1) (null? Q2)) A]
-                [(null? Q1)
+                [(and (null? Qsym) (null? Qε)) A]
+                [(null? Qsym)
                  ;; epsilons are DFS
-                 (let-values (((Q1n Q2n Q2 A) (proceed Q2 A V)))
-                    (loop Q1n (append Q2 Q2n) A))]
+                 (let-values (((Qsymn Qεn Qε A) (proceed Qε A V)))
+                    (loop Qsymn (append Qε Qεn) A))]
                 [else
-                 ;; but symbols are BFS!
-                 (let-values (((Q1n Q2n Q1 A) (proceed Q1 A V)))
-                    (loop (append Q1 Q1n) (append Q2n Q2) A))]))))]))
+                 ;; but symbols are still BFS!
+                 (let-values (((Qsymn Qεn Qsym A) (proceed Qsym A V)))
+                    (loop (append Qsym Qsymn) (append Qεn Qε) A))]))))]))
     ((_ M I stop? A-stop? include? U b f א)
      (run M I stop? A-stop? include? U b f א 'bfs #f))
     ((_ M I stop? A-stop? include? U b f א disp?)

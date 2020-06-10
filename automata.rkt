@@ -355,7 +355,7 @@ input symbols
            '()
            δ))))
 
-(define (minimize-states M)
+(define (shrink-states M)
   (match M
     [(Automaton S F _ δ Σ Γ)
      (let* ((groups (get-state-groups M))
@@ -364,12 +364,12 @@ input symbols
             (δ (update-δ groups δ)))
        (Automaton S (set-intersection A F) A δ Σ Γ))]))
 
-(define (minimize-stack M)
+(define (shrink-stack M)
   (match M
     [(Automaton S F A δ Σ Γ)
      (let-values (((Γ δ) (update-stack (get-stack-groups M) δ)))
        (Automaton S F A δ Σ (if Γ `(,Γ) '())))]))
 
 (define (minimize-PDA M)
-  (minimize-stack (minimize-states M)))
+  (shrink-stack (shrink-states M)))
 
