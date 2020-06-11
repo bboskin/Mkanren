@@ -58,7 +58,7 @@ Frontier -- (List State)
 Transition-Function -- (List Transition)
 Tmap -- HashMap{equal?, (List Symbol) x HashMap{equal?, (list Stack x Symbol}}
 (Maybe Type) -- #f | Type
-
+Updates : (List (Symbol x Letter x Acc -> Acc))
 |#
 
 ;; Here's a structure definition. We can use it to define finite-state automata.
@@ -266,10 +266,10 @@ Tmap -- HashMap{equal?, (List Symbol) x HashMap{equal?, (list Stack x Symbol}}
      [else '()]))
 
 ;; apply-transitions :
-;; (List (Symbol x Letter x Acc -> Acc)) x Symbol x TMap x (List Stack) x Acc
-;;    -> Letter -> (List State)
+;; Updates x Symbol x TMap x Symbol x (List Stack) x Acc x
+;; Letter -> (List State)
 
-(define ((apply-transitions U s δ ks acc) i)
+(define (apply-transitions U δ s ks acc i)
   (foldr
    (λ (e a)
      (let ((new-stacks (map apply-instruction ks (cdr e)))
@@ -279,6 +279,20 @@ Tmap -- HashMap{equal?, (List Symbol) x HashMap{equal?, (list Stack x Symbol}}
            a)))
    '()
    (get-δ δ s i ks)))
+
+;; apply-symbols : Updates x TMap x Symbol x (List Stack) x Acc x (List Letter)
+;; -> (List State)
+(define (apply-symbols U δ s ks acc L)
+  (foldr
+   (λ (x ans)
+     (append (apply-transitions U δ s ks acc x) ans))
+   '()
+   L))
+
+;; apply-ε : TMap x Symbol x (List Stack) x Acc
+;; -> (List State)
+(define (apply-ε δ s ks acc)
+  (apply-transitions #f δ s ks acc 'ε))
 
 
 ;; visited : HashMap{State x Bool} -> State -> Boolean
@@ -305,6 +319,11 @@ Tmap -- HashMap{equal?, (List Symbol) x HashMap{equal?, (list Stack x Symbol}}
 
 ;; initializing/updating the frontier
 
+;; step : PERFORMS SIDE-EFFECT OF ADDING VISITED STATES TO UNRETURNED V
+;; (List Letter) x (Symbol -> Bool) x (Acc -> Bool) x (Acc -> Bool) x
+;; (Acc x Value -> Value) x ((List Letter) x Acc -> (List Letter)) x
+;; Update x Tmap x
+;; Frontier x Value x HashMap{State -> Value}
 (define ((step Σ F? include? stop? f א U δ) Q A V)
   (match Q
     ['() (values '() '() '() A)]
@@ -314,21 +333,21 @@ Tmap -- HashMap{equal?, (List Symbol) x HashMap{equal?, (list Stack x Symbol}}
      (begin
        (hash-set! V `(,s ,ks ,a) #t)
        (let ((A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
-             (Q1n (foldr append '() (map (apply-transitions U s δ ks a) (א Σ a))))
-             (Q2n ((apply-transitions #f s δ ks a) 'ε)))
+             (Q1n (apply-symbols U δ s ks a (א Σ a)))
+             (Q2n (apply-ε δ s ks a)))
          (values Q1n Q2n Q A)))]))
 
 (define-syntax run
   (syntax-rules ()
-    ((_ M I stop? A-stop? include? U b f א)
-     (run M I stop? A-stop? include? U b f א #f))
-    ((_ M I stop? A-stop? include? U b f א disp?)
+    ((_ M I stop? finished? include? U b f א)
+     (run M I stop? finished? include? U b f א #f))
+    ((_ M I stop? finished? include? U b f א disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
         (let* ((δ (δ->hash δ Γ))
                (F? (final-state? F))
                (V (make-hash))
-               (proceed (step Σ F? include? stop? f א U δ)))
+               (expand (step Σ F? include? stop? f א U δ)) )
           (let loop ((Qsym `((,S ,(empty-stacks (length Γ)) ,I)))
                      (Qε '())
                      (A b))
@@ -336,13 +355,12 @@ Tmap -- HashMap{equal?, (List Symbol) x HashMap{equal?, (list Stack x Symbol}}
               (if disp?
                   (begin (displayln Qsym) (displayln "")  (displayln Qε))
                   void)
-              
               (cond
-                [(A-stop? A) A]
+                [(finished? A) A]
                 [(null? Qsym)
                  (if (null? Qε) A
-                     (let-values (((Qsymn Qεn Qε A) (proceed Qε A V)))
+                     (let-values (((Qsymn Qεn Qε A) (expand Qε A V)))
                        (loop Qsymn (enqueue Qεn Qε) A)))]
                 [else
-                 (let-values (((Qsymn Qεn Qsym A) (proceed Qsym A V)))
+                 (let-values (((Qsymn Qεn Qsym A) (expand Qsym A V)))
                     (loop (push Qsymn Qsym) (push Qεn Qε) A))]))))]))))

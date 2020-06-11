@@ -153,7 +153,7 @@ Eid: symbol describing a field of CDR
     `((Feature ->
                (Filter* GNats ReduceNats->Nat)
                (Filter* GSet ReduceSet->Nat))
-      (Filter* -> ε (Filter Filter*))
+      (Filter* -> ε #;(Filter Filter*))
       (GNats -> SelectNats
              (Map GNats ReduceNats->Nat)
              (Map GSet ReduceSet->Nat))
@@ -224,6 +224,10 @@ cpu time: 1883 real time: 1895 gc time: 587
 cpu time: 221361 real time: 215320 gc time: 94911
 1000
 
+> (time (random-word Feature 5)) ;; with no Filter recursion
+cpu time: 25207 real time: 26206 gc time: 8253
+'(maprecipient-id maptime selectdur reducelength reduceset reducelength)
+
 Cleaning up search more -- everything is DFS
 expanded state came from a symbol generated, otherwise BFS
 
@@ -234,11 +238,9 @@ cpu time: 101509 real time: 101149 gc time: 41087
 cpu time: 1082 real time: 1065 gc time: 86
 #t
 
-
-> (time (random-word Feature 5))
-cpu time: 25207 real time: 26206 gc time: 8253
-'(maprecipient-id maptime selectdur reducelength reduceset reducelength)
-
+> (time (random-word Feature 5)) ;; with no Filter recursion
+cpu time: 53502 real time: 42452 gc time: 11138
+'(maploc maptime selectloc reducelength reduceset reducelength)
 |#
 
 
