@@ -13,11 +13,6 @@
 
 TODOs:
 
--- change implementation of sets into hashmaps
-   (change fns in basics.rkt)
-   and then confirm that we are using set
-   operations (only) everywhere we should and make it work
-
 -- make renaming better (no gensym)
 
 -- add this step to CFG->CNF consolidation:
@@ -28,7 +23,7 @@ TODOs:
 
    where s1 only points to S2, S2
 
--- add contracts to all the functions
+-- add contracts to all the functions IN PRGRESS
 
 -- formalize gramamars in Pie
 
@@ -38,6 +33,9 @@ TODOs:
 
 ;; related to jack's stuff
 
+-- write a query that returns k words starting with a given prefix
+
+-- implement feature generation in MK and compare speed, results
 -- experiment with other function groups (call em computation groups?)
 
    -- Features (filter* • [G: select | group G reduce)] • reduce)

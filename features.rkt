@@ -153,7 +153,7 @@ Eid: symbol describing a field of CDR
     `((Feature ->
                (Filter* GNats ReduceNats->Nat)
                (Filter* GSet ReduceSet->Nat))
-      (Filter* -> ε #;(Filter Filter*))
+      (Filter* -> ε (Filter Filter*))
       (GNats -> SelectNats
              (Map GNats ReduceNats->Nat)
              (Map GSet ReduceSet->Nat))
@@ -224,11 +224,16 @@ cpu time: 1883 real time: 1895 gc time: 587
 cpu time: 221361 real time: 215320 gc time: 94911
 1000
 
+Cleaning up search more -- everything is DFS
+expanded state came from a symbol generated, otherwise BFS
 
+>  (time (begin (apply-words (take-words Feature 1000)) #t))
+cpu time: 101509 real time: 101149 gc time: 41087
+#t
+>  (time (begin (apply-words (take-words Feature 500)) #t))
+cpu time: 1082 real time: 1065 gc time: 86
+#t
 
-;; takes a while (25 seconds) but here is finally what I think is
-;; an interesting feature
-(Filter* was removed from grammar when this was generated)
 
 > (time (random-word Feature 5))
 cpu time: 25207 real time: 26206 gc time: 8253

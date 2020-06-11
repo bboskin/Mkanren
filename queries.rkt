@@ -49,7 +49,6 @@
       #f
       (λ (a A) (if A A (if (<= k (length (car a))) (car a) #f)))
       (λ (Σ _) (shuffle Σ))
-      'shuff
       disp?)]))
 
 
@@ -63,12 +62,10 @@
       (λ (a) #f)
       (λ (A) (>= (length A) k))
       (λ (a) #t)
-      (list (λ (_ i a) (snoc i a))
-            )
+      (list (λ (_ i a) (snoc i a)))
       '()
       (λ (a A) (set-cons (car a) A))
       (λ (Σ _) Σ)
-      'bfs
       disp?)]))
 
 

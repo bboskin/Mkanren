@@ -35,19 +35,42 @@
          ;; THE REST ARE FUNCTIONS TO hide again
          ;; stack function used in M-Intersection
          all-empty?
-         check-stacks)
+         apply-instruction)
 
+;; Here are some types that we will refer to and intend what we hope are
+;; intuitive definitions.
 
+#|
+Any -- anything
+Bool -- #t | #f
+Symbol -- Racket symbol
+Nat -- natural number
+Letter -- Symbol | Nat | Boolean
+Stack-Instruction -- 'preserve-stack | `(pop on ,Letter push ,(list Letter))
+Transition -- `(,Symbol ,Letter ,Symbol . ,(List Stack-Instruction))
+
+Set -- list of anything with no duplicates
+List -- true list
+
+Acc -- (List Any)
+Stack -- '(#f) | (cons Letter Stack)
+Frontier -- (List State)
+Transition-Function -- (List Transition)
+Tmap -- HashMap{equal?, (List Symbol) x HashMap{equal?, (list Stack x Symbol}}
+(Maybe Type) -- #f | Type
+
+|#
 
 ;; Here's a structure definition. We can use it to define finite-state automata.
 
+
 (struct Automaton
-  [start-state         ;; S
-   final-states        ;; F
-   all-states          ;; Q
-   transition-function ;; δ
-   alphabet            ;; Σ
-   stack-alphabets]    ;; (a list of Γs, with one alphabet for each stack, so we can have as many stacks as we want without changing anything!)
+  [start-state         ;; S : Symbol
+   final-states        ;; F : (List Symbol)
+   all-states          ;; Q : (List Symbol)
+   transition-function ;; δ : (list Transition)
+   alphabet            ;; Σ : (List Symbol)
+   stack-alphabets]    ;; Γ : (List Stack)
   #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -58,6 +81,8 @@
 
 
 ;; Variable names
+
+;; symbol-append : Symbol x Symbol -> Symbol
 (define (symbol-append s1 s2)
   (string->symbol
    (string-append
@@ -66,6 +91,7 @@
 
 ;; to ensure separate namespaces
 
+;; rename-xs : (List Symbol) x (-> Symbol Symbol) x List -> List
 (define (rename-xs xs ext ls)
   (cond
     [(member ls xs) (ext ls)]
@@ -76,9 +102,13 @@
 
 ;; Lists
 
+;; snoc : List x List -> List
 (define (snoc x s) (foldr cons `(,x) s))
+
+;; member-of : List -> Any -> Bool
 (define (member-of s) (λ (x) (member x s)))
 
+;; replace* : Any x Any x List -> List
 (define (replace* old new x)
   (cond
     [(equal? x old) new]
@@ -87,12 +117,14 @@
            (replace* old new (cdr x)))]
     [else x]))
 
+;; member* : Any x List -> Bool
 (define (member* x l)
   (or (equal? x l)
       (and (cons? l)
            (or (member* x (car l))
                (member* x (cdr l))))))
 
+;; powerset : List-> List
 (define (powerset l)
   (foldr
    (λ (x P)
@@ -104,44 +136,68 @@
    l))
 
 ;; Sets
+
+;; set-cons : Any x Set -> Set
 (define (set-cons x s) (if (member x s) s (cons x s)))
+
+;; set-union : Set x Set -> Set
 (define (set-union s1 s2) (foldr set-cons s2 s1))
+
+;; set-difference : Set x Set -> Set
 (define (set-difference s1 s2) (foldr remove s1 s2))
+
+;; set-intersection : Set x Set -> Set
 (define (set-intersection s1 s2) (filter (member-of s2) s1))
+
+;; set-equal?? : Set x Set -> Bool
 (define (set-equal?? s1 s2)
   (and (andmap (λ (x) (member x s2)) s1)
        (andmap (λ (x) (member x s1)) s2)))
+
+;; to-set : Set -> List
 (define (to-set ls)
   (foldr set-cons '() ls))
 
 
-;; Stacks 
-(define (stack-empty? k) (equal? k '(#f)))
-(define (all-empty? ks) (andmap stack-empty? ks))
+;;;; Stacks
+
+;; empty-stack : Stack
+(define empty-stack '(#f))
+
+;; stack-empty? : Stack -> Bool
+(define stack-empty? (λ (x) (equal? x empty-stack)))
 
 
+;; all-empty? : (List Stack) -> Bool
+(define all-empty? (λ (ks) (andmap stack-empty? ks)))
+
+;; empty-stacks : Nat -> (List Stack)
+(define (empty-stacks k) (build-list k (λ (_) empty-stack)))
+
+;; terminal : Any -> Bool
 ;; symbols allowed to part of Σ
 (define (terminal? x)
   (and (not (eqv? x 'ε))
        (or (symbol? x)
            (member x '(0 1 2 3 4 5 6 7 8 9)))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; frontier-based breadth-first search
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; frontier-based search : 2FS two-frontier search
+;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+;; enqueue : Frontier x Frontier -> Frontier
+(define (enqueue new old) (append old new))
+;; push : Frontier x Frontier -> Frontier
+(define (push new old) (append new old))
 
+;; id : Any -> Any
 (define id (λ (x) x))
 
-(define ((final-state? F) s) (and (memv s F)))
+;; final-state? : (List Symbol) x Symbol -> Boolean
+(define ((final-state? F) s) (and (memv s F) #t))
 
-
-
-;; new implementation of run
-;; where δ is locally represented as nested hashtables
-
-
+;;  make-condition : Instruction -> Value
 (define (make-condition instr)
   (match instr
     ['preserve-stack #t]
@@ -168,6 +224,7 @@
              relevant)
         h))))
 
+;; δ->hash : (list Transition) -> (List (List Symbol))
 (define (δ->hash δ Γ)
   (let ((PΓ (all-combinations (map (λ (x) (cons #f x)) Γ))))
     (foldr
@@ -187,34 +244,48 @@
      (make-hash)
      δ)))
 
-(define (check-stacks ks ms)
-  (match* (ks ms)
-    [('() _) #f]
-    [(`(,s . ,ks) `(pop on #t push ,vs))
-     (append vs (cons s ks))]
-    [(`(,s . ,ks) `(pop on ,γ push ,vs))
-     (and (eqv? s γ) (append vs ks))]
-    [(`(,s . ,ks) 'preserve-stack)
-     (cons s ks)]))
+;; apply-instruction : Stack x Stack-Instruction-> Stack
+(define (apply-instruction k i)
+  (match i
+    ['preserve-stack k]
+    [`(pop on #t push ,vs) (append vs k)]
+    [`(pop on ,γ push ,vs) (append vs (cdr k))]))
+
+
+
+;; get-δ :
+;; TMap x Symbol x Letter x (List Stack)
+;;  -> (List `(,Symbol . ,(List Stack-Instruction)))
+(define (get-δ δ s i ks)
+  (cond
+     [(hash-ref δ `(,s ,i) (λ () #f)) =>
+      (λ (v?)
+        (cond
+          [(hash-ref v? (map car ks) (λ () #f)) => id]
+          [else '()]))]
+     [else '()]))
+
+;; apply-transitions :
+;; (List (Symbol x Letter x Acc -> Acc)) x Symbol x TMap x (List Stack) x Acc
+;;    -> Letter -> (List State)
 
 (define ((apply-transitions U s δ ks acc) i)
-  (let ((δ (let ((v? (hash-ref δ `(,s ,i) (λ () #f))))
-             (if v?
-                 (let ((v? (hash-ref v? (map car ks) (λ () #f))))
-                   (if v? v? '()))
-                 '()))))
-    (foldr
-     (λ (e a)
-       (let ((new-stacks (map check-stacks ks (cdr e)))
-             (new-acc (if U (map (λ (u a) (u s i a)) U acc) acc)))
-         (cons `(,(car e) ,new-stacks ,new-acc) a)))
-     '()
-     δ)))
+  (foldr
+   (λ (e a)
+     (let ((new-stacks (map apply-instruction ks (cdr e)))
+           (new-acc (if U (map (λ (u a) (u s i a)) U acc) acc)))
+       (if (andmap id new-stacks)
+           (cons `(,(car e) ,new-stacks ,new-acc) a)
+           a)))
+   '()
+   (get-δ δ s i ks)))
 
 
+;; visited : HashMap{State x Bool} -> State -> Boolean
 (define (visited? V) (λ (x) (hash-has-key? V x)))
 
 
+;; all-combinations : (List (List Symbol)) -> (List (List Symbol))
 (define (all-combinations ls)
   (cond
     [(null? ls) '()]
@@ -232,18 +303,9 @@
 ;; SORRY FOR SIDE-EFFECTS BUTS ITS SO MUCH FASTER
 ;; Now using separate queue for states derived from epsilons and other symbols
 
-
 ;; initializing/updating the frontier
-(define (F0 S Γ I) `((,S ,(build-list (length Γ) (λ (_) '(#f))) ,I)))
 
-(define (Fk A search)
-  (λ (old L δ ε)
-    (match search
-      ['dfs (append (foldr append '() (map δ L)) ε old)]
-      ['bfs (append old ε (foldr append '() (map δ L)))]
-      ['shuff (append old (shuffle (append ε (foldr append '() (map δ L)))))])))
-
-(define ((step Σ F? include? stop? f update-Q א U δ) Q A V)
+(define ((step Σ F? include? stop? f א U δ) Q A V)
   (match Q
     ['() (values '() '() '() A)]
     [`((,s ,ks ,(? stop?)) . ,Q) (values '() '() Q A)]
@@ -258,32 +320,29 @@
 
 (define-syntax run
   (syntax-rules ()
-    ((_ M I stop? A-stop? include? U b f א Π disp?)
+    ((_ M I stop? A-stop? include? U b f א)
+     (run M I stop? A-stop? include? U b f א #f))
+    ((_ M I stop? A-stop? include? U b f א disp?)
      (match M
        [(Automaton S F A δ Σ Γ)
         (let* ((δ (δ->hash δ Γ))
-               (update-Q (Fk A Π))
                (F? (final-state? F))
                (V (make-hash))
-               (proceed (step Σ F? include? stop? f update-Q א U δ)))
-          (let loop ((Qsym (F0 S Γ I))
+               (proceed (step Σ F? include? stop? f א U δ)))
+          (let loop ((Qsym `((,S ,(empty-stacks (length Γ)) ,I)))
                      (Qε '())
                      (A b))
             (begin
-              (if disp? (begin (displayln Qsym) (displayln "")(displayln Qε)) void)
+              (if disp?
+                  (begin (displayln Qsym) (displayln "")  (displayln Qε))
+                  void)
               
               (cond
                 [(A-stop? A) A]
-                [(and (null? Qsym) (null? Qε)) A]
                 [(null? Qsym)
-                 ;; epsilons are DFS
-                 (let-values (((Qsymn Qεn Qε A) (proceed Qε A V)))
-                    (loop Qsymn (append Qε Qεn) A))]
+                 (if (null? Qε) A
+                     (let-values (((Qsymn Qεn Qε A) (proceed Qε A V)))
+                       (loop Qsymn (enqueue Qεn Qε) A)))]
                 [else
-                 ;; but symbols are still BFS!
                  (let-values (((Qsymn Qεn Qsym A) (proceed Qsym A V)))
-                    (loop (append Qsym Qsymn) (append Qεn Qε) A))]))))]))
-    ((_ M I stop? A-stop? include? U b f א)
-     (run M I stop? A-stop? include? U b f א 'bfs #f))
-    ((_ M I stop? A-stop? include? U b f א disp?)
-     (run M I stop? A-stop? include? U b f א 'bfs disp?))))
+                    (loop (push Qsymn Qsym) (push Qεn Qε) A))]))))]))))

@@ -31,7 +31,7 @@
           (,S0 ε ,S2 preserve-stack)
           . ,(append δ1 δ2))
         (set-union Σ1 Σ2)
-        (map set-union Γ1 Γ2)))]))
+        (map set-union (set Γ1) (set Γ2))))]))
 
 (define (M-Concatenation M1 M2)
   (match* (M1 M2)
