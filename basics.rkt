@@ -38,7 +38,7 @@
          apply-instruction)
 
 ;; Here are some types that we will refer to and intend what we hope are
-;; intuitive definitions.
+;; intuitive definitions. 
 
 #|
 Any -- anything
@@ -69,8 +69,8 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
    final-states        ;; F : (List Symbol)
    all-states          ;; Q : (List Symbol)
    transition-function ;; δ : (list Transition)
-   alphabet            ;; Σ : (List Symbol)
-   stack-alphabets]    ;; Γ : (List Stack)
+   alphabet            ;; Σ : (List Letter)
+   stack-alphabets]    ;; Γ : (List (List Symbol))
   #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

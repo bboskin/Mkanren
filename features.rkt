@@ -153,7 +153,7 @@ Eid: symbol describing a field of CDR
     `((Feature ->
                (Filter* GNats ReduceNats->Nat)
                (Filter* GSet ReduceSet->Nat))
-      (Filter* -> ε #;(Filter Filter*))
+      (Filter* -> ε (Filter Filter*))
       (GNats -> SelectNats
              (Map GNats ReduceNats->Nat)
              (Map GSet ReduceSet->Nat))
@@ -241,6 +241,10 @@ cpu time: 1082 real time: 1065 gc time: 86
 > (time (random-word Feature 5)) ;; with no Filter recursion
 cpu time: 53502 real time: 42452 gc time: 11138
 '(maploc maptime selectloc reducelength reduceset reducelength)
+> (time (random-word Feature 5)) ;; with Filter recursion
+cpu time: 64240 real time: 63762 gc time: 16852
+'(filterzero-minutes? filterMichigan? filterjack? selectrecipient-id reducelength)
+
 |#
 
 

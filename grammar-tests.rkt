@@ -2,7 +2,9 @@
 
 (require "grammars.rkt"
          "queries.rkt"
-         "examples.rkt")
+         "examples.rkt"
+         "automata.rkt"
+         "basics.rkt")
 
 (define test? #t)
 ;; implementations of a few grammars, using
@@ -77,6 +79,11 @@
 
 (define (Set-tests)
   (and
+   (set-equal?? '()
+                (set-intersection
+                 (find-words A*/DFA 5)
+                 (find-words (M-Negation A*/DFA) 5)))
+   
    (set-equal?? (find-words A*UAnBn/PDA 4)
                 (set-union (find-words A*/PDA 4) (find-words AnBn/PDA 4)))
    (set-equal?? (find-words A*UA*/PDA 4)

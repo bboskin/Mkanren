@@ -24,6 +24,8 @@ TODOs:
    where s1 only points to S2, S2
 
 -- add contracts to all the functions IN PRGRESS
+   -- basics.rkt done
+   -- automata.rkt in progress
 
 -- formalize gramamars in Pie
 
