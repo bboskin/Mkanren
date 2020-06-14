@@ -90,7 +90,7 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 (define (rep S groups)
   (let ((gs (filter (λ (x) (member S x)) groups)))
     (match (length gs)
-      [0 (error "automata state ~s has no representatives: ~s" S (map car gs))]
+      [0 S #;(error "automata state ~s has no representatives: ~s" S (map car gs))]
       [1 (caar gs)]
       [n+2 (error "automata state ~s has more than one representative: ~s" S (map car gs))])))
 
@@ -106,6 +106,39 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 ;;;;;;;;;;;;;;;;
 ;; phase 1
 
+;; circ-group-helper : Symbol x Symbol x (List Group) -> Symbol -> (List Nat)
+(define ((circ-group-helper s γ gs) x)
+  (match x
+    [`(,a ,S2)
+     (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
+    [`(ε ,S2 preserve-stack)
+     `(,(lookup-group S2 gs 0))]
+    [`(ε ,S2 (pop on #t push ,vs))
+     `(,(lookup-group S2 gs 0))]
+    [`(ε ,S2 (pop on ,g push ,vs))
+     (if (eqv? g γ)
+         `(,(lookup-group S2 gs 0))
+         '())]
+    [`(,a ,S2 preserve-stack)
+     (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
+    [`(,a ,S2 (pop on #t push ,vs))
+     (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
+    [`(,a ,S2 (pop on ,g push ,vs))
+     (if (and (eqv? a s) (eqv? g γ))
+         `(,(lookup-group S2 gs 0))
+         '())]))
+
+
+;; circ-group : Symbol x Symbol x Transition-Function x (List Group)
+;;   -> Symbol -> (cons Symbol (List Nat)
+(define ((circ-group s γ δ gs) S)
+  (cons S
+        (foldr
+         (λ (x a)
+           (set-union ((circ-group-helper s γ gs) (cdr x)) a))
+           '()
+           (filter (λ (x) (eqv? (car x) S)) δ))))
+
 ;; TODO make circumstances  work for any number of stacks
 ;; make-circumstances : (List Letter) x (List (List Symbol)) ->
 (define (make-circumstances Σ Γ)
@@ -115,8 +148,8 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
      '()
      Γ)))
 
-;; update-group : Group x (List (cons Symbol (List Symbol)))
-;;  -> (List (cons Symbol (List Symbol)))
+
+;; update-group : Group x (List Group) -> (List Group)
 (define (update-group g dests)
   (match g
     ['() '()]
@@ -130,15 +163,15 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
                 `((,e1 ,s1 . ,ss) . ,ans)
                 `((,s1 . ,ss) . ,(loop ans)))])))]))
 
-;; apply-circumstances :
+;; apply-circumstance :
 ;;  Transition-Function -> `(,Symbol ,(Maybe Symbol) x (List Group) -> (List Group)
 (define ((apply-circumstance δ) P groups)
-  (let* ((F (find-dest (car P) (cadr P) δ groups)))
+  (let* ((F (circ-group (car P) (cadr P) δ groups)))
     (append-map (λ (g) (update-group g (map F g))) groups)))
 
 
 
-
+;; update-delta : (List Group) x Transition-Function -> Transition-Function
 (define (update-δ groups δ)
   (foldr
    (λ (x a)
@@ -152,44 +185,11 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
    '()
    δ))
 
-(define ((find-dest s γ δ gs) S)
-  (cons S
-        (foldr
-         (λ (x a)
-           (if (eqv? (car x) S)
-               (set-union
-                (match (cdr x)
-                  [`(,a ,S2)
-                   (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
-                  [`(ε ,S2 preserve-stack)
-                   `(,(lookup-group S2 gs 0))]
-                  [`(ε ,S2 (pop on #t push ,vs))
-                   `(,(lookup-group S2 gs 0))]
-                  [`(ε ,S2 (pop on ,g push ,vs))
-                   (if (eqv? g γ)
-                       `(,(lookup-group S2 gs 0))
-                       '())]
-                  [`(,a ,S2 preserve-stack)
-                   (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
-                  [`(,a ,S2 (pop on #t push ,vs))
-                   (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
-                  [`(,a ,S2 (pop on ,g push ,vs))
-                   (if (and (eqv? a s) (eqv? g γ))
-                       `(,(lookup-group S2 gs 0))
-                       '())])
-                a)
-               a))
-           '()
-           δ)))
 
-;; state-groups
-(define (update-by-dest init-groups s γ δ)
-  (let ((F (find-dest s γ δ init-groups)))
-    (foldr (λ (g1 a)
-             (append (update-group g1 (map F g1)) a))
-           '()
-           init-groups)))
 
+;; state-groups :
+;;  Transition-Function x (List Symbol) x (List Symbol) x (List Letter) x (List (List Symbol))
+;;  -> (List Group)
 (define (state-groups δ A F Σ Γ)
   (foldl
    (apply-circumstance δ)
@@ -217,75 +217,74 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 
 
 
-;; add-to-group : Symbol x
-(define (add-to-group s L groups)
+;; add-to-group : Symbol x Transition-Function x (List Group) -> (List Group)
+(define (add-to-group s δ groups)
   (match groups
-    ['() `((,s ,L (,s)))]
-    [`((,rep ,L-g ,g) . ,groups)
-     (if (set-equal?? L-g (replace* s rep L))
-         `((,rep ,L-g (cons s g)) . ,groups)
-         `((,rep ,L-g ,g) . ,(add-to-group s L groups)))]))
-
+    ['() `((,s ,δ (,s)))]
+    [`((,rep ,δg ,g) . ,groups)
+     (if (set-equal?? δg (replace* s rep δ))
+         `((,rep ,δg (cons s g)) . ,groups)
+         `((,rep ,δg ,g) . ,(add-to-group s δ groups)))]))
 
 ;; get-stack-groups : Automaton -> (List Group)
-(define (get-stack-groups M)
+(define (stack-groups M)
   (match M
-    [(Automaton S F A δ Σ '()) '()]
-    [(Automaton S F A δ Σ `(,Γ))
-     (let ((assoclist (map (λ (x) (cons x (filter (λ (r) (member* x r)) δ))) Γ)))
-       (let loop ((symbols Γ)
-                  (groups '()))
-         (match symbols
-           ['() groups]
-           [`(,s1 . ,symbols)
-            (let ((L (cdr (assv s1 assoclist))))
-              (loop symbols
-                    (add-to-group s1 L groups)))])))]
-    [else (error "not handling multiple stacks yet")]))
+    [(Automaton S F A δ Σ Γ)
+     (map (λ (Γ)
+            (let ((assoclist (map (λ (x) (cons x (filter (λ (r) (member* x r)) δ))) Γ)))
+              (foldl
+               (λ (s a)
+                 (add-to-group s (cdr (assv s assoclist)) a))
+               '()
+               Γ)))
+          Γ)]))
 
 ;; TODO make functional on machines with any number of stacks)
 
-;; update-stack : (List Group) x (List Transition) ->
-;; (Values (List Symbol) (List Transition))
+;; update-inst : (List Group) -> Stack-Instruction -> Stack-instruction
+(define ((update-inst groups) r)
+  (match r
+    ['preserve-stack
+     'preserve-stack]
+    [`(pop on #t push ,vs)
+     `(pop on #t push ,(map (stack-rep groups) vs))]
+    [`(pop on ,b push ,vs)
+     `(pop on ,((stack-rep groups) b) push ,(map (stack-rep groups) vs))]))
 
+;; update-stack : (List Transition) -> (List Group) -> (List Transition)
+(define ((update-stack δ) groups)
+  (map
+    (λ (r)
+      (match r
+        [`(,S1 ,s ,S2 . ,rules)
+         `(,S1 ,s ,S2 . ,(map (update-inst groups) rules))]))
+    δ))
 
-
-(define (update-stack groups δ)
-  (if (null? groups)
-      (values '() δ)
-      (values (map car groups)
-          (foldr
-           (λ (r a)
-             (match r
-               [`(,S1 ,s ,S2) (cons r a)]
-               [`(,S1 ,s ,S2 preserve-stack) (cons r a)]
-               [`(,S1 ,s ,S2 (pop on #t push ,vs))
-                (set-cons
-                 `(,S1 ,s ,S2 (pop on #t push ,(map (stack-rep groups) vs)))
-                 a)]
-               [`(,S1 ,s ,S2 (pop on ,b push ,vs))
-                (set-cons
-                 `(,S1 ,s ,S2 (pop on ,((stack-rep groups) b) push ,(map (stack-rep groups) vs)))
-                 a)]))
-           '()
-           δ))))
+;; stackless : Transition-Function x Stack -> Transition-Function
+(define (stackless δ Γ)
+  (filter (λ (T) (andmap (λ (x) (not (member* x T))) Γ)) δ))
 
 ;; shrink-stack : Automaton -> Automaton
 (define (shrink-stack M)
   (match M
     [(Automaton S F A δ Σ Γ)
-     (let-values (((Γ δ) (update-stack (get-stack-groups M) δ)))
-       (Automaton S F A δ Σ (if (null? Γ) Γ `(,Γ))))]))
+     (let* ((gs (stack-groups M))
+            (v (map (update-stack δ) gs))
+            (δ (foldr append (stackless δ (foldr append '() Γ)) v))
+            (Γ (map (λ (g) (map car g)) gs)))
+       (Automaton S F A δ Σ Γ))]))
 
 
 ;;;;;;;;;;;;;;;;;
 ;; putting phases together
 
-
 ;; minimize-PDA : Automaton -> Automaton
 (define (minimize-PDA M)
   (shrink-stack (shrink-states M)))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; M-Difference (needs interesection)
 
 #;
 (define (M-Difference M1 M2)
