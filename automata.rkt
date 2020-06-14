@@ -90,7 +90,7 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 (define (rep S groups)
   (let ((gs (filter (λ (x) (member S x)) groups)))
     (match (length gs)
-      [0 S #;(error "automata state ~s has no representatives: ~s" S (map car gs))]
+      [0 S]
       [1 (caar gs)]
       [n+2 (error "automata state ~s has more than one representative: ~s" S (map car gs))])))
 
@@ -106,48 +106,57 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 ;;;;;;;;;;;;;;;;
 ;; phase 1
 
+(define (stack-agrees? γ r)
+  (match r
+    ['preserve-stack #t]
+    [`(pop on #t push ,vs) #t]
+    [`(,pop on ,g push ,vs) (eqv? γ g)]))
+
 ;; circ-group-helper : Symbol x Symbol x (List Group) -> Symbol -> (List Nat)
-(define ((circ-group-helper s γ gs) x)
+(define ((circ-group-helper s γs gs) x)
+  ;(displayln γs )
+  ;(displayln x)
+  ;(displayln "")
   (match x
     [`(,a ,S2)
      (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
-    [`(ε ,S2 preserve-stack)
-     `(,(lookup-group S2 gs 0))]
-    [`(ε ,S2 (pop on #t push ,vs))
-     `(,(lookup-group S2 gs 0))]
-    [`(ε ,S2 (pop on ,g push ,vs))
-     (if (eqv? g γ)
+    [`(ε ,S2 . ,rs)
+     (if (andmap stack-agrees? γs rs)
          `(,(lookup-group S2 gs 0))
          '())]
-    [`(,a ,S2 preserve-stack)
-     (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
-    [`(,a ,S2 (pop on #t push ,vs))
-     (if (eqv? a s) `(,(lookup-group S2 gs 0)) '())]
-    [`(,a ,S2 (pop on ,g push ,vs))
-     (if (and (eqv? a s) (eqv? g γ))
+    [`(,a ,S2 . ,rs)
+     (if (and (eqv? a s) (andmap stack-agrees? γs rs))
          `(,(lookup-group S2 gs 0))
          '())]))
 
 
 ;; circ-group : Symbol x Symbol x Transition-Function x (List Group)
 ;;   -> Symbol -> (cons Symbol (List Nat)
-(define ((circ-group s γ δ gs) S)
+(define ((circ-group s γs δ gs) S)
   (cons S
         (foldr
          (λ (x a)
-           (set-union ((circ-group-helper s γ gs) (cdr x)) a))
+           (set-union ((circ-group-helper s γs gs) (cdr x)) a))
            '()
            (filter (λ (x) (eqv? (car x) S)) δ))))
 
-;; TODO make circumstances  work for any number of stacks
-;; make-circumstances : (List Letter) x (List (List Symbol)) ->
-(define (make-circumstances Σ Γ)
-  (let ((Γ (if (null? Γ) '((#f)) (map (λ (x) (cons #f x)) Γ))))
-    (foldr
-     (λ (γ a) (append (cartesian-product Σ γ) a))
-     '()
-     Γ)))
 
+;; make-circumstances : (List Letter) x (List (List Symbol)) ->
+
+(define (circ-help ls a)
+  (append-map
+   (λ (i) (map (λ (x) (cons i x)) a))
+   ls))
+
+
+(define (make-circumstances Σ Γ)
+  (let ((Γ (if (null? Γ) '() (map (λ (x) (cons #f x)) Γ))))
+    (let ((ans (map reverse
+                    (foldl
+                     circ-help
+                     (map list Σ)
+                     (reverse Γ)))))
+      ans)))
 
 ;; update-group : Group x (List Group) -> (List Group)
 (define (update-group g dests)
@@ -165,11 +174,10 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 
 ;; apply-circumstance :
 ;;  Transition-Function -> `(,Symbol ,(Maybe Symbol) x (List Group) -> (List Group)
+
 (define ((apply-circumstance δ) P groups)
-  (let* ((F (circ-group (car P) (cadr P) δ groups)))
+  (let* ((F (circ-group (car P) (cdr P) δ groups)))
     (append-map (λ (g) (update-group g (map F g))) groups)))
-
-
 
 ;; update-delta : (List Group) x Transition-Function -> Transition-Function
 (define (update-δ groups δ)
@@ -201,7 +209,7 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 (define (shrink-states M)
   (match M
     [(Automaton S F A δ Σ Γ)
-     (let* ((groups (state-groups δ A F Σ Γ))
+     (let* ((groups (remove '() (state-groups δ A F Σ Γ)))
             (A (map car groups))
             (F (set-intersection A F))
             (δ (update-δ groups δ)))
@@ -239,8 +247,6 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
                Γ)))
           Γ)]))
 
-;; TODO make functional on machines with any number of stacks)
-
 ;; update-inst : (List Group) -> Stack-Instruction -> Stack-instruction
 (define ((update-inst groups) r)
   (match r
@@ -251,14 +257,11 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
     [`(pop on ,b push ,vs)
      `(pop on ,((stack-rep groups) b) push ,(map (stack-rep groups) vs))]))
 
-;; update-stack : (List Transition) -> (List Group) -> (List Transition)
-(define ((update-stack δ) groups)
-  (map
-    (λ (r)
-      (match r
-        [`(,S1 ,s ,S2 . ,rules)
-         `(,S1 ,s ,S2 . ,(map (update-inst groups) rules))]))
-    δ))
+;; update-stack : (List Group) -> Transition -> Transition
+(define ((update-stack gs) r)
+  (match r
+    [`(,S1 ,s ,S2 . ,rules)
+     `(,S1 ,s ,S2 . ,(map (update-inst gs) rules))]))
 
 ;; stackless : Transition-Function x Stack -> Transition-Function
 (define (stackless δ Γ)
@@ -268,10 +271,10 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 (define (shrink-stack M)
   (match M
     [(Automaton S F A δ Σ Γ)
-     (let* ((gs (stack-groups M))
-            (v (map (update-stack δ) gs))
+     (let* ((gss (stack-groups M))
+            (v (map (λ (x) (map (update-stack x) δ)) gss))
             (δ (foldr append (stackless δ (foldr append '() Γ)) v))
-            (Γ (map (λ (g) (map car g)) gs)))
+            (Γ (map (λ (gs) (map car gs)) gss)))
        (Automaton S F A δ Σ Γ))]))
 
 

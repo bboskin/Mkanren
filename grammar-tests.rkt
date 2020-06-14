@@ -96,6 +96,34 @@
 
 
 
+(define 2-stack/PDA
+  (Automaton
+   'S
+   '(F)
+   '(S F)
+   '((S a S preserve-stack (pop on #t push (A)))
+     (S b S (pop on #t push (Z)) preserve-stack)
+     (S c F (pop on Z push ()) (pop on A push ()))
+     (F c F (pop on Z push ()) (pop on A push ())))
+   '(a b c)
+   '((Z)
+     (A))))
+
+(define 2-stack/min (minimize-PDA 2-stack/PDA))
+
+(define 2-stack/1-stack/PDA
+  (Automaton
+   'S
+   '(F)
+   '(S F)
+   '((S a S preserve-stack (pop on #t push (A)))
+     (S b S (pop on #t push (Z)) preserve-stack)
+     (S c F (pop on Z push ()) (pop on A push ()))
+     (F c F (pop on Z push ()) (pop on A push ())))
+   '(a b c)
+   '((Z)
+     (A))))
+
 
 (define (Min-tests)
   (and
@@ -113,7 +141,9 @@
    (set-equal?? (find-words Bool/Simp/min 4)
                 (find-words Bool/Simp/PDA 4))
    (set-equal?? (find-words Bool/min 3)
-                (find-words Bool/PDA 3))))
+                (find-words Bool/PDA 3))
+   (set-equal?? (find-words 2-stack/min 3)
+                (find-words 2-stack/PDA 3))))
 
 
 
