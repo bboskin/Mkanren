@@ -96,31 +96,9 @@
    ;; New tests to test intersection
    (set-equal?? (find-words A/DFA 100) '((a)))
    (set-equal?? (find-words A+/DFA2 20)
-                (find-words A+/PDA 20))))
-
-#|
-Unminimized
-
-> A+/DFA2
-(Automaton
- 'COMP13829
- '(COMP13830 COMP13832)
- '(COMP13827 COMP13828 COMP13829 COMP13830 COMP13831 COMP13832 COMP13833 COMP13834)
- '((COMP13828 ε COMP13834)
-   (COMP13827 ε COMP13833)
-   (COMP13831 ε COMP13829)
-   (COMP13831 ε COMP13827)
-   (COMP13831 ε COMP13828)
-   (COMP13830 ε COMP13829)
-   (COMP13832 ε COMP13830)
-   (COMP13832 ε COMP13831)
-   (COMP13833 a COMP13832)
-   (COMP13829 ε COMP13833)
-   (COMP13829 ε COMP13834))
- '(a)
- '())
-
-|#
+                (find-words A+/PDA 20))
+   (set-equal?? (take-words A+/DFA 5)
+                (take-words (M-Intersection A+BnCn A*/DFA) 5))))
 
 
 

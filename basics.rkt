@@ -9,8 +9,10 @@
          Automaton-stack-alphabets
         
          terminal?
-         run
 
+         run/fast
+         run/bfs
+         
          ;; basic basics
          id
          
@@ -29,13 +31,7 @@
 
          ;; variable name management
          symbol-append
-         rename-xs
-
-
-         ;; THE REST ARE FUNCTIONS TO hide again
-         ;; stack function used in M-Intersection
-         all-empty?
-         apply-instruction)
+         rename-xs)
 
 ;; Here are some types that we will refer to and intend what we hope are
 ;; intuitive definitions. 
@@ -369,7 +365,31 @@ f : (List Acc) x Answer -> Answer
 disp? : Boolean
 
 |#
-(define-syntax run
+(define-syntax run/bfs
+  (syntax-rules ()
+    ((_ M I stop? finished? include? U b f א)
+     (run M I stop? finished? include? U b f א #f))
+    ((_ M I stop? finished? include? U b f א disp?)
+     (match M
+       [(Automaton S F A δ Σ Γ)
+        (let* ((δ (δ->hash δ Γ))
+               (F? (final-state? F))
+               (V (make-hash))
+               (expand (step Σ F? include? stop? f א U δ)) )
+          (let loop ((Q `((,S ,(empty-stacks (length Γ)) ,I)))
+                     (A b))
+            (begin
+              (if disp? (begin (displayln Q) (displayln "")) void)
+              (cond
+                [(finished? A) A]
+                [(null? Q) A]
+                [else
+                 (let-values (((Qsym Qε Qold A) (expand Q A V)))
+                    (loop (enqueue Qold (enqueue Qsym Qε)) A))]))))]))))
+
+
+
+(define-syntax run/fast
   (syntax-rules ()
     ((_ M I stop? finished? include? U b f א)
      (run M I stop? finished? include? U b f א #f))
