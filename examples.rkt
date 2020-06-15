@@ -105,7 +105,7 @@
 (define Bool/min (minimize-PDA Bool/PDA))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; tests involving multiple stacks, and more minimization
+;; examples involving multiple stacks
 
 (define 2-stack/PDA
   (Automaton
@@ -121,3 +121,39 @@
      (A))))
 
 (define 2-stack/min (minimize-PDA 2-stack/PDA))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; examples with set intersection
+
+(define A/DFA (M-Intersection A*/DFA AUB/DFA))
+(define A+/DFA2 (M-Intersection A*/DFA AUB+/DFA))
+(define A/PDA (M-Intersection A*/PDA AUB/PDA))
+(define A+/PDA2 (M-Intersection A*/PDA AUB+/PDA))
+
+(define A*B*C* (RE->DFA '(((a *) • (b *)) • (c *))))
+(define AnBnCn (M-Intersection 2-stack/PDA A*B*C*))
+
+(define A*BnCn
+  (CNF->PDA
+   (CFG->CNF
+    '((S -> (A* BnCn))
+      (A* -> ε ('a A*))
+      (BnCn -> ε ('b BnCn 'c))))))
+
+(define A+BnCn
+  (CNF->PDA
+   (CFG->CNF
+    '((S -> (A* BnCn))
+      (A* -> 'a ('a A*))
+      (BnCn -> ε ('b BnCn 'c))))))
+
+(define AnBnC*
+  (CNF->PDA
+   (CFG->CNF
+    '((S -> (AnBn C*))
+      (C* -> ε ('c C*))
+      (AnBn -> ε ('a AnBn 'b))))))
+
+(define AnBnCn2 (M-Intersection A+BnCn AnBnC*))
+
+

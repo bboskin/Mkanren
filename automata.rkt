@@ -4,15 +4,14 @@
 
 
 (provide Automaton
+         
          M-Union
-         M-Concatenation
-         M-Negation
-         minimize-PDA
-
-
-         ;; not done yet but eventually (hopefully)
          M-Intersection
-         #;M-Difference)
+         M-Negation
+         M-Difference
+         M-Concatenation
+         
+         minimize-PDA)
 
 ;; M-Union : Automaton x Automaton -> Automaton
 (define (M-Union M1 M2)
@@ -34,6 +33,47 @@
         (set-union Σ1 Σ2)
         (map set-union (set Γ1) (set Γ2))))]))
 
+;; M-Intersection : Automaton x Automaton -> Automaton
+;; helpers defined at the end of the file
+(define (M-Intersection M1 M2)
+  (match* (M1 M2)
+    [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
+      (Automaton S2 F2 A2 δ2 Σ2 Γ2))
+     (let* ((Σ (set-intersection Σ1 Σ2))
+            (Γ (append Γ1 Γ2))
+            (S (list S1 S2))
+            (δ (append
+                (add-stack-ignores 'right δ1 (length Γ2))
+                (add-stack-ignores 'left δ2 (length Γ1))))
+            (δ (project-to-compound-states S A1 A2 δ Σ))
+            (A (append (map car δ) (map caddr δ)))
+            (F (filter (λ (x) (and (memv (car x) F1) (memv (cadr x) F2))) A)))
+       ;; making single-symbol names for compound states, and updating S, F, A, and δ
+       #;(Automaton S F A δ Σ Γ)
+       #;(give-names (Automaton S F A δ Σ Γ))
+       (minimize-PDA (give-names (Automaton S F A δ Σ Γ))))]))
+
+;; M-Negation : Automaton -> Automaton
+(define (M-Negation M)
+  (match M
+    [(Automaton S F A δ Σ Γ)
+     (let* ((trash (gensym 'Trash))
+            (A (cons trash A))
+            (F (set-difference A F))
+            (trash-rules
+             (foldr
+              (λ (x a)
+                `(,@(map (λ (γ) `(,x ε ,trash (pop on ,γ push ()))) Γ) ,@a))
+              '() A))
+            (δ (append trash-rules δ)))
+       (Automaton S F A δ Σ Γ))]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; M-Difference (relies on interesection and Negation)
+
+(define (M-Difference M1 M2)
+  (M-Intersection M1 (M-Negation M2)))
+
 ;; M-Concatenation : Automaton x Automaton -> Automaton
 (define (M-Concatenation M1 M2)
   (match* (M1 M2)
@@ -51,6 +91,10 @@
           . ,(append δ1 δ2))
         (set-union Σ1 Σ2)
         (map set-union Γ1 Γ2)))]))
+
+;; minimize-PDA : Automaton -> Automaton
+(define (minimize-PDA M)
+  (shrink-stack (shrink-states M)))
 
 ;;;;;;;;;;;;;;;;;;;
 ;; helpers for intersection
@@ -70,54 +114,10 @@
        [`(,S1 ,a ,S2 . ,rules)
         `(,S1 ,a ,S2 ,@(k-preserves k) . ,rules)]))
    δ))
-#;
-;; M-Intersection : Automaton x Automaton -> Automaton
-(define (M-Intersection M1 M2)
-  (match* (M1 M2)
-    [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
-      (Automaton S2 F2 A2 δ2 Σ2 Γ2))
-     (let ((S2 (symbol-append S2 'b))
-           (F2 (rename-xs A2 (λ (x) (symbol-append x 'b)) F2))
-           (A2 (rename-xs A2 (λ (x) (symbol-append x 'b)) A2))
-           (δ2 (rename-xs A2 (λ (x) (symbol-append x 'b)) δ2)))
-       (let* ((S (gensym 'S))
-              (F1s (gensym 'F))
-              (F2s (gensym 'F))
-              (F0 (gensym 'F))
-              (F (gensym 'F))
-              (A `(,S ,F ,F0 ,@A1 ,@A2))
-              (Σ (set-union Σ1 Σ2))
-              (Γ (append Γ1 Γ2))
-              (γ (gensym 'γ))
-              (γ2 (gensym 'γ))
-              (Γ (if (null? Γ) `((,γ ,γ2)) (map (λ (x) `(,γ ,γ2 . ,x)) Γ)))
-              (k-stacks (length Γ))
-              (δ `((,S ε ,S1    . ,(build-list k-stacks (λ (_) `(pop on #t push (,γ2 ,γ)))))
-                   (,S ε ,S2    . ,(build-list k-stacks (λ (_) `(pop on #t push (,γ2 ,γ)))))
-                   ,@(map (λ (f) `(,f ε ,F0  . ,(build-list k-stacks (λ (_) `(pop on ,γ2 push ()))))) F1)
-                   ,@(map (λ (f) `(,f ε ,F0  . ,(build-list k-stacks (λ (_) `(pop on ,γ2 push ()))))) F2)
-                   (,F0 ε ,F . ,(build-list k-stacks (λ (_) `(pop on ,γ push ()))))
-                   ,@(add-k-preserves-on-right δ1 (- k-stacks (length Γ1)))
-                   ,@(add-k-preserves-on-left  δ2 (- k-stacks (length Γ2))))))
-         (Automaton S `(,F) A δ Σ Γ)))]))
 
-;; M-Negation : Automaton -> Automaton
-(define (M-Negation M)
-  (match M
-    [(Automaton S F A δ Σ Γ)
-     (let* ((trash (gensym 'Trash))
-            (A (cons trash A))
-            (F (set-difference A F))
-            (trash-rules
-             (foldr
-              (λ (x a)
-                `(,@(map (λ (γ) `(,x ε ,trash (pop on ,γ push ()))) Γ) ,@a))
-              '()  A))
-            (δ (append trash-rules δ)))
-       (Automaton S F A δ Σ Γ))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; three-phase PDA minimization
+;; Helpers for two(soon to be three)-phase PDA minimization
 ;; first states are minimized (and transitions as permitted)
 ;; and then stack symbols are consolidated (and transitions as permitted)
 ;; and then more states/transitions are reduced
@@ -172,6 +172,7 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 ;;;;;;;;;;;;;;;;
 ;; phase 1
 
+;; stack-agrees : Symbol x Stack-Instruction -> Boolean
 (define (stack-agrees? γ r)
   (match r
     ['preserve-stack #t]
@@ -210,15 +211,12 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
            '()
            (filter (λ (x) (eqv? (car x) S)) δ))))
 
+;; circ-help : (List Symbol) x (List (List Symbol)) -> (List (List Symbol))
+(define (circ-help ls a)
+  (append-map  (λ (i) (map (λ (x) (cons i x)) a)) ls))
+
 
 ;; make-circumstances : (List Letter) x (List (List Symbol)) ->
-
-(define (circ-help ls a)
-  (append-map
-   (λ (i) (map (λ (x) (cons i x)) a))
-   ls))
-
-
 (define (make-circumstances Σ Γ)
   (let ((Γ (if (null? Γ) '() (map (λ (x) (cons #f x)) Γ))))
     (let ((ans (map reverse
@@ -264,6 +262,7 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
     [(Automaton S F A δ Σ Γ)
      (let* ((groups (remove '() (state-groups δ A F Σ Γ)))
             (A (map car groups))
+            (S (rep S groups))
             (F (set-intersection A F))
             (δ (map (update-states groups) δ)))
        (Automaton S (set-intersection A F) A δ Σ Γ))]))
@@ -304,40 +303,8 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
             (Γ (map (λ (gs) (map car gs)) gss)))
        (Automaton S F A δ Σ Γ))]))
 
-
-;;;;;;;;;;;;;;;;;
-;; putting phases together
-
-;; minimize-PDA : Automaton -> Automaton
-(define (minimize-PDA M)
-  (shrink-stack (shrink-states M)))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;
-;; M-Difference (needs interesection)
-
-#;
-(define (M-Difference M1 M2)
-  (M-Intersection M1 (M-Negation M2)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;
-;; Helper functions for Intersection
-;; (which for now assumes separate namespaces for the two input machines
-
-#|
-We add powerstates to δ.
-
-The powerstate <(S1 ...) a k?> is a state that can be transitioned
-to on a with k?,
-and epsilon transitions to S1 ... on all stack configurations.
-
-Powerstates do not point to powerstates.
-
-We can transition from a non-powerstate to a powerstate when on the agreeing
-input symbols
-|#
-
-
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helpers for Set-Intersection
 
 (define (add-stack-ignores mode δ k)
   (match mode
@@ -348,72 +315,6 @@ input symbols
            (match x
              [`(,S1 ,c ,S2 . ,s) `(,S1 ,c ,S2 ,@v . ,s)]))
          δ))]))
-
-
-
-
-(define (merge s1 s2)
-  (match* (s1 s2)
-    [((? symbol?) (? symbol?)) (if (eqv? s1 s2) s2  `(,s1 ,s2))]
-    [((? list?) (? symbol?)) (set-cons s2 s1)]
-    [((? symbol?) (? list?)) (set-cons s1 s2)]
-    [((? list?) (? list?)) (set-union s1 s2)]))
-
-
-(define (stacks-mutually-occur? ks1 ks2)
-  (match* (ks1 ks2)
-    [('() '()) '()]
-    [(`(preserve-stack . ,ks1) `(,k2 . ,ks2))
-     (cons k2 (stacks-mutually-occur? ks1 ks2))]
-    [(`(,k1 . ,ks1) `(preserve-stack . ,ks2))
-     (cons k1 (stacks-mutually-occur? ks1 ks2))]
-    [(`((pop on ,c1 push ,vs1) . ,ks1)
-      `((pop on ,c2 push ,vs2) . ,ks2))
-     (if (not (equal? vs1 vs2)) #f
-         (cond
-           [(eqv? c1 #t) (cons `(pop on ,c2 push ,vs1) (stacks-mutually-occur? ks1 ks2))]
-           [(eqv? c2 #t) (cons `(pop on ,c1 push ,vs1) (stacks-mutually-occur? ks1 ks2))]
-           [(eqv? c1 c2) (cons `(pop on ,c2 push ,vs1) (stacks-mutually-occur? ks1 ks2))]
-           [else #f]))]
-    [(_ _) #f]))
-
-(define ((find-rules s1 s2 S1 S2 Σ δ1 δ2) c a)
-  (append (let ((s1-rel (filter (λ (x) (eqv? (car x) s1)) δ1))
-                (s2-rel (filter (λ (x) (eqv? (car x) s2)) δ2)))
-            (foldr
-             (λ (x a)
-               (match x
-                 [`((,from1 ,from2) ,c ,tos . ,stack-instrs)
-                  (append
-                   (map (λ (e) `(,from1 ,c ,from2 ,e . ,stack-instrs))
-                        (cartesian-product
-                         (filter (λ (x) (memv x S1)) tos)
-                         (filter (λ (x) (memv x S2)) tos)))
-                   a)]
-                 [else a]))
-             '()
-             (foldr
-              (λ (x a)
-                (match x
-                  [`((,from1 ,on1 ,to1 . ,stck1)
-                     (,from2 ,on2 ,to2 . ,stck2))
-                   (cond
-                     [(and (or (eqv? on1 #t)
-                               (eqv? on2 #t)
-                               (eqv? on1 on2))
-                           (stacks-mutually-occur? stck1 stck2))
-                      =>
-                      (λ (stack-instrs)
-                        `(((,s1 ,s2) ,on1 ,(merge to1 to2) . ,stack-instrs)
-                          . ,a))]
-                     [else a])]))
-              '()
-              (foldr
-               (cartesian-product s1-rel s2-rel)))))
-          a))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;
-;; NEW IMPLEMENTATION
 
 ;; renaming an automaton with compound (list) state names
 ;; to symbol state names
@@ -447,17 +348,6 @@ input symbols
 ;; consolidate transitions based on the letter/stack condition,
 ;; and have them point from the compound state
 
-
-#|
-
-S1 => ε : E1, a : A1
-S2 => ε : E2, a : A2
-
-`(,S1 ,S2) => a : (A1 x A2) , ε : E1 x E2
-
-
-
-|#
 
 
 (define (merge-stack-rules ra rb)
@@ -538,56 +428,3 @@ S2 => ε : E2, a : A2
                         (Q (append Q (map caddr ts))))
                     (loop Q V δ))))]))))
 
-(define (M-Intersection M1 M2)
-  (match* (M1 M2)
-    [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
-      (Automaton S2 F2 A2 δ2 Σ2 Γ2))
-     
-     (let* ((Σ (set-intersection Σ1 Σ2))
-            (Γ (append Γ1 Γ2))
-            (S (list S1 S2))
-            (δ (append
-                (add-stack-ignores 'right δ1 (length Γ2))
-                (add-stack-ignores 'left δ2 (length Γ1))))
-            (δ (project-to-compound-states S A1 A2 δ Σ))
-            (A (to-set (cons S (append (map car δ) (map caddr δ)))))
-            (F (filter
-                (λ (x) (and (not (null? (set-intersection x F1)))
-                            (not (null? (set-intersection x F2)))))
-                A)))
-       ;; making single-symbol names for compound states, and updating S, F, A, and δ
-       (give-names (Automaton S F A δ Σ Γ)))]))
-
-
-;;; attempt 2
-
-#|
-(define (M-Intersection M1 M2)
-  (match* (M1 M2)
-    [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
-      (Automaton S2 F2 A2 δ2 Σ2 Γ2))
-     (let ((S2 (symbol-append S2 'b))
-           (F2 (rename-xs A2 (λ (x) (symbol-append x 'b)) F2))
-           (A2 (rename-xs A2 (λ (x) (symbol-append x 'b)) A2))
-           (δ2 (rename-xs A2 (λ (x) (symbol-append x 'b)) δ2)))
-       (let* ((S (gensym 'S))
-              (F1s (gensym 'F))
-              (F2s (gensym 'F))
-              (F0 (gensym 'F))
-              (F (gensym 'F))
-              (A `(,S ,F ,F0 ,@A1 ,@A2))
-              (Σ (set-union Σ1 Σ2))
-              (Γ (append Γ1 Γ2))
-              (γ (gensym 'γ))
-              (γ2 (gensym 'γ))
-              (Γ (if (null? Γ) `((,γ ,γ2)) (map (λ (x) `(,γ ,γ2 . ,x)) Γ)))
-              (k-stacks (length Γ))
-              (δ `((,S ε ,S1    . ,(build-list k-stacks (λ (_) `(pop on #t push (,γ2 ,γ)))))
-                   (,S ε ,S2    . ,(build-list k-stacks (λ (_) `(pop on #t push (,γ2 ,γ)))))
-                   ,@(map (λ (f) `(,f ε ,F0  . ,(build-list k-stacks (λ (_) `(pop on ,γ2 push ()))))) F1)
-                   ,@(map (λ (f) `(,f ε ,F0  . ,(build-list k-stacks (λ (_) `(pop on ,γ2 push ()))))) F2)
-                   (,F0 ε ,F . ,(build-list k-stacks (λ (_) `(pop on ,γ push ()))))
-                   ,@(add-k-preserves-on-right δ1 (- k-stacks (length Γ1)))
-                   ,@(add-k-preserves-on-left  δ2 (- k-stacks (length Γ2))))))
-         (Automaton S `(,F) A δ Σ Γ)))]))
-|#

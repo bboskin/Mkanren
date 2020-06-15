@@ -204,13 +204,22 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
     [`(pop on #t push ,vs) #t]
     [`(pop on ,γ push ,vs) γ]))
 
+;; subsumed-by : (List {#t U Symbol}) x (List {#t U Symbol}) -> Boolean
 (define ((subsumed-by c1) c2)
   (match* (c1 c2)
     [('() '()) #t]
     [(`(#t . ,d1) `(,a2 . ,d2)) ((subsumed-by d1) d2)]
+    [(`(,a1 . ,d1) `(#t . ,d2)) ((subsumed-by d1) d2)]
     [(`(,a1 . ,d1) `(,a2 . ,d2))
      (and (eqv? a1 a2) ((subsumed-by d1) d2))]
     [(_ _) #f]))
+
+;;  add-conditions : (List (List Symbol)) x Symbol x (List Stack-Instruction)
+;;  x HashMap{(List Symbol) -> (List `(,Symbol . ,(List Stack-Instruction)))}
+;;  -> HashMap{(List Symbol) -> (List `(,Symbol . ,(List Stack-Instruction)))}
+;; HAS SIDE EFFECT OF MODIFYING GIVEN HASHMAP not sure if
+;; it matters philosophically since that's
+;; all it returns anyway but
 
 (define (add-conditions PΓ S instrs h)
   (let ((conds (map make-condition instrs)))
@@ -250,7 +259,6 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
     ['preserve-stack k]
     [`(pop on #t push ,vs) (append vs k)]
     [`(pop on ,γ push ,vs) (append vs (cdr k))]))
-
 
 
 ;; get-δ :
@@ -336,7 +344,31 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
              (Q1n (apply-symbols U δ s ks a (א Σ a)))
              (Q2n (apply-ε δ s ks a)))
          (values Q1n Q2n Q A)))]))
+#|
+Run macro:
 
+
+;; types of loop variables
+Q : Frontier, (List State)
+V : HashMap(State -> Boolean)
+A : Answer
+;;
+
+;; types of input variables
+M : Automaton
+I : (List Acc) (Initial Value for accumulator (will be treated as a list of values))
+stop? : (List Acc) -> Boolean
+finished? : Answer -> Boolean
+include? : (List Acc) -> Boolean
+U : (List (-> Acc Acc)), how to update each accumulator
+
+b : Answer
+f : (List Acc) x Answer -> Answer
+
+א : Letter x (List Letter) -> (List Letter)
+disp? : Boolean
+
+|#
 (define-syntax run
   (syntax-rules ()
     ((_ M I stop? finished? include? U b f א)
@@ -352,9 +384,7 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
                      (Qε '())
                      (A b))
             (begin
-              (if disp?
-                  (begin (displayln Qsym) (displayln "")  (displayln Qε))
-                  void)
+              (if disp? (begin (displayln Qsym) (displayln "")  (displayln Qε)) void)
               (cond
                 [(finished? A) A]
                 [(null? Qsym)
