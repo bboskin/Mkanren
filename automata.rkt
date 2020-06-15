@@ -22,16 +22,23 @@
            (S2 (symbol-append S2 'b))
            (F2 (rename-xs A2 (λ (x) (symbol-append x 'b)) F2))
            (A2 (rename-xs A2 (λ (x) (symbol-append x 'b)) A2))
-           (δ2 (rename-xs A2 (λ (x) (symbol-append x 'b)) δ2)))
-       (Automaton
-        S0
-        (append F1 F2)
-        (append A1 A2)
-        `((,S0 ε ,S1 preserve-stack)
-          (,S0 ε ,S2 preserve-stack)
-          . ,(append δ1 δ2))
+           (δ2 (rename-xs A2 (λ (x) (symbol-append x 'b)) δ2))
+           (k-stacks (max (length Γ1) (length Γ2))))
+       (let* ((k-needed-1 (- k-stacks (length Γ1)))
+              (k-needed-2 (- k-stacks (length Γ2)))
+              (Γ1 (append Γ1 (build-list k-needed-1 (λ (_) '()))))
+              (Γ2 (append Γ2 (build-list k-needed-2 (λ (_) '())))))
+         (Automaton
+          S0
+          (append F1 F2)
+          (cons S0 (append A1 A2))
+          `(,((add-stack-ignore 'left k-stacks)`(,S0 ε ,S1))
+            ,((add-stack-ignore 'left k-stacks)`(,S0 ε ,S2))
+            . ,(append
+                (add-stack-ignores 'left δ1 k-needed-1)
+                (add-stack-ignores 'left δ2 k-needed-2)))
         (set-union Σ1 Σ2)
-        (map set-union (set Γ1) (set Γ2))))]))
+        (map set-union Γ1 Γ2))))]))
 
 ;; M-Intersection : Automaton x Automaton -> Automaton
 ;; helpers defined at the end of the file
@@ -48,7 +55,6 @@
             (δ (project-to-compound-states S A1 A2 δ Σ))
             (A (append (map car δ) (map caddr δ)))
             (F (filter (λ (x) (and (memv (car x) F1) (memv (cadr x) F2))) A)))
-       ;; making single-symbol names for compound states, and updating S, F, A, and δ
        #;(Automaton S F A δ Σ Γ)
        #;(give-names (Automaton S F A δ Σ Γ))
        (minimize-PDA (give-names (Automaton S F A δ Σ Γ))))]))
@@ -306,15 +312,28 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Helpers for Set-Intersection
 
+
+(define ((add-stack-ignore mode k) t)
+  (match mode
+    ['right (let ((v (build-list k (λ (_) 'preserve-stack))))
+              (append t v))]
+    ['left (let ((v (build-list k (λ (_) 'preserve-stack))))
+             (match t
+               [`(,S1 ,c ,S2 . ,s)
+                `(,S1 ,c ,S2 ,@v . ,s)]))]))
+
 (define (add-stack-ignores mode δ k)
+  (map (add-stack-ignore mode k) δ)
+  #;
   (match mode
     ['right (let ((v (build-list k (λ (_) 'preserve-stack))))
               (map (λ (x) (append x v)) δ))]
     ['left (let ((v (build-list k (λ (_) 'preserve-stack))))
-    (map (λ (x)
-           (match x
-             [`(,S1 ,c ,S2 . ,s) `(,S1 ,c ,S2 ,@v . ,s)]))
-         δ))]))
+             (map (λ (x)
+                    (match x
+                      [`(,S1 ,c ,S2 . ,s)
+                       `(,S1 ,c ,S2 ,@v . ,s)]))
+                  δ))]))
 
 ;; renaming an automaton with compound (list) state names
 ;; to symbol state names
@@ -420,11 +439,28 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
         [`((,S1 ,S2) . ,Q)
          (let ((ts1 (assv S1 transition-groups1))
                (ts2 (assv S2 transition-groups2)))
-                (let ((ts (if (and ts1 ts2)
-                              (group-transitions S1 S2 Σ (cdr ts1) (cdr ts2))
-                              '())))
+                (let ((ts (group-transitions S1 S2 Σ
+                                             (if ts1 (cdr ts1) '())
+                                             (if ts2 (cdr ts2) '()))))
                   (let ((δ (append ts δ))
                         (V (cons `(,S1 ,S2) V))
                         (Q (append Q (map caddr ts))))
                     (loop Q V δ))))]))))
 
+(define Start '(S145408 Start146913))
+(define A1 '(S145408 S145404 F145405 S145406 F145407))
+(define A2 '(S145451 S145451F S145449b S145449Fb S145426b S145426Fb))
+(define δ '((S145408 ε S145404 preserve-stack)
+     (S145408 ε S145406 preserve-stack)
+     (S145404 a F145405 preserve-stack)
+     (S145406 b F145407 preserve-stack)
+     (Start146913 ε S145451 preserve-stack)
+     (Start146913 ε S145449b preserve-stack)
+     (S145451 b S145451F preserve-stack)
+     (S145451 a S145451F preserve-stack)
+     (S145426b a S145426Fb preserve-stack)
+     (S145449b ε S145426b (pop on #t push (γ145568)))
+     (S145426Fb ε S145449b (pop on γ145568 push (γ145568)))
+     (S145449Fb ε S145449Fb (pop on γ145568 push ()))
+     (S145449b a S145449Fb preserve-stack)))
+(define Σ '(a b))

@@ -98,7 +98,17 @@
    (set-equal?? (find-words A+/DFA2 20)
                 (find-words A+/PDA 20))
    (set-equal?? (take-words A+/DFA 5)
-                (take-words (M-Intersection A+BnCn A*/DFA) 5))))
+                (take-words (M-Intersection A+BnCn A*/DFA) 5))
+   (set-equal?? (find-words AUB/DFA 3)
+                (find-words (M-Intersection
+                             AUB/DFA
+                             (M-Union AUB/PDA A+/PDA)) 3))
+   (set-equal?? (find-words 2-stack/min 10)
+                (find-words (M-Union
+                             (M-Intersection AUB/PDA AnBnCn)
+                             2-stack/min) 10))
+   (set-equal?? (find-words E 1)
+                (find-words (M-Difference A*/DFA A+/DFA) 1))))
 
 
 

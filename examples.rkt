@@ -133,6 +133,9 @@
 (define A*B*C* (RE->DFA '(((a *) • (b *)) • (c *))))
 (define AnBnCn (M-Intersection 2-stack/PDA A*B*C*))
 
+
+(define E (CNF->PDA (CFG->CNF '((S -> ε)))))
+
 (define A*BnCn
   (CNF->PDA
    (CFG->CNF
