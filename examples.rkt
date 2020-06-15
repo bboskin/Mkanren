@@ -103,3 +103,21 @@
 (define Bool/SuperSimp/min (minimize-PDA Bool/SuperSimp/PDA))
 (define Bool/Simp/min (minimize-PDA Bool/Simp/PDA))
 (define Bool/min (minimize-PDA Bool/PDA))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; tests involving multiple stacks, and more minimization
+
+(define 2-stack/PDA
+  (Automaton
+   'S
+   '(F)
+   '(S F)
+   '((S a S preserve-stack (pop on #t push (A)))
+     (S b S (pop on #t push (Z)) preserve-stack)
+     (S c F (pop on Z push ()) (pop on A push ()))
+     (F c F (pop on Z push ()) (pop on A push ())))
+   '(a b c)
+   '((Z)
+     (A))))
+
+(define 2-stack/min (minimize-PDA 2-stack/PDA))
