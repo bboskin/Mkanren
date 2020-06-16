@@ -35,8 +35,8 @@
           `(,((add-stack-ignore 'left k-stacks)`(,S0 ε ,S1))
             ,((add-stack-ignore 'left k-stacks)`(,S0 ε ,S2))
             . ,(append
-                (add-stack-ignores 'left δ1 k-needed-1)
-                (add-stack-ignores 'left δ2 k-needed-2)))
+                (add-stack-ignores 'right δ1 k-needed-1)
+                (add-stack-ignores 'right δ2 k-needed-2)))
         (set-union Σ1 Σ2)
         (map set-union Γ1 Γ2))))]))
 
@@ -55,10 +55,9 @@
             (δ (project-to-compound-states S A1 A2 δ Σ))
             (A (append (map car δ) (map caddr δ)))
             (F (filter (λ (x) (and (memv (car x) F1) (memv (cadr x) F2))) A)))
-       #;(Automaton S F A δ Σ Γ)
-       #;(give-names (Automaton S F A δ Σ Γ))
        (minimize-PDA (give-names (Automaton S F A δ Σ Γ))))]))
 
+;; untested
 ;; M-Negation : Automaton -> Automaton
 (define (M-Negation M)
   (match M
@@ -77,9 +76,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;; M-Difference (relies on interesection and Negation)
 
+;; untested
 (define (M-Difference M1 M2)
   (M-Intersection M1 (M-Negation M2)))
 
+;; untested
 ;; M-Concatenation : Automaton x Automaton -> Automaton
 (define (M-Concatenation M1 M2)
   (match* (M1 M2)
@@ -88,15 +89,23 @@
      (let ((S2 (symbol-append S2 'b))
            (F2 (rename-xs A2 (λ (x) (symbol-append x 'b)) F2))
            (A2 (rename-xs A2 (λ (x) (symbol-append x 'b)) A2))
-           (δ2 (rename-xs A2 (λ (x) (symbol-append x 'b)) δ2)))
-       (Automaton
-        S1
-        F2
-        (append A1 A2)
-        `(,@(map (λ (f) `(,f ε ,S2 (pop on #f push (#f)))) F1)
-          . ,(append δ1 δ2))
+           (δ2 (rename-xs A2 (λ (x) (symbol-append x 'b)) δ2))
+           (k-stacks (max (length Γ1) (length Γ2))))
+       (let* ((k-needed-1 (- k-stacks (length Γ1)))
+              (k-needed-2 (- k-stacks (length Γ2)))
+              (Γ1 (append Γ1 (build-list k-needed-1 (λ (_) '()))))
+              (Γ2 (append (build-list k-needed-2 (λ (_) '())) Γ2)))
+         (Automaton
+          S1
+          F2
+          (append A1 A2)
+          `(,@(add-stack-ignores
+               'right (map (λ (f) `(,f ε ,S2)) F1) k-stacks)
+            . ,(append
+                (add-stack-ignores 'right δ1 k-needed-1)
+                (add-stack-ignores 'left δ2 k-needed-2)))
         (set-union Σ1 Σ2)
-        (map set-union Γ1 Γ2)))]))
+        (map set-union Γ1 Γ2))))]))
 
 ;; minimize-PDA : Automaton -> Automaton
 (define (minimize-PDA M)

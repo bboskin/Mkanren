@@ -1,6 +1,7 @@
 #lang racket
 
 (require "grammars.rkt"
+         "G-to-M.rkt"
          "queries.rkt"
          "examples.rkt"
          "automata.rkt"
@@ -107,6 +108,18 @@
                 (find-words (M-Union
                              (M-Intersection AUB/PDA AnBnCn)
                              2-stack/min) 10))
+   (set-equal?? (find-words 2-stack/min 10)
+                (find-words (M-Union
+                             2-stack/min
+                             (M-Intersection AnBnCn AUB/PDA)) 10))
+   (set-equal?? (find-words A*B*C* 2)
+                (find-words (M-Concatenation
+                             (CNF->PDA (CFG->CNF (RE->CFG '(a *))))
+                             (M-Concatenation
+                              (RE->DFA '(b *))
+                              (CNF->PDA (CFG->CNF (RE->CFG '(c *))))))
+                            2))
+   #;
    (set-equal?? (find-words E 1)
                 (find-words (M-Difference A*/DFA A+/DFA) 1))))
 
