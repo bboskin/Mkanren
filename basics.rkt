@@ -334,12 +334,17 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
     [`((,s ,ks ,(? stop?)) . ,Q) (values '() '() Q A)]
     [`(,(? (visited? V)) . ,Q) (values '() '() Q A)]
     [`((,s ,ks ,a) . ,Q)
+     (let ((A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
+             (Q1n (apply-symbols U δ s ks a (א Σ a)))
+             (Q2n (apply-ε δ s ks a)))
+         (values Q1n Q2n Q A))
      (begin
        (hash-set! V `(,s ,ks ,a) #t)
        (let ((A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
              (Q1n (apply-symbols U δ s ks a (א Σ a)))
              (Q2n (apply-ε δ s ks a)))
          (values Q1n Q2n Q A)))]))
+
 #|
 Run macro:
 
@@ -404,7 +409,9 @@ disp? : Boolean
                      (Qε '())
                      (A b))
             (begin
-              (if disp? (begin (displayln Qsym) (displayln "")  (displayln Qε)) void)
+              (if disp?
+                  (begin (displayln Qsym) (displayln "") (displayln Qε))
+                  void)
               (cond
                 [(finished? A) A]
                 [(null? Qsym)
@@ -413,4 +420,4 @@ disp? : Boolean
                        (loop Qsymn (enqueue Qεn Qε) A)))]
                 [else
                  (let-values (((Qsymn Qεn Qsym A) (expand Qsym A V)))
-                    (loop (push Qsymn Qsym) (push Qεn Qε) A))]))))]))))
+                    (loop (enqueue Qsymn Qsym) (push Qεn Qε) A))]))))]))))

@@ -7,8 +7,8 @@
          
          M-Union
          M-Intersection
-         M-Negation
-         M-Difference
+         ;M-Negation
+         ;M-Difference
          M-Concatenation
          
          minimize-PDA)
@@ -61,15 +61,15 @@
 ;; M-Negation : Automaton -> Automaton
 (define (M-Negation M)
   (match M
-    [(Automaton S F A δ Σ Γ)
+    [(Automaton S Fi A δ Σ Γ)
      (let* ((trash (gensym 'Trash))
             (A (cons trash A))
-            (F (set-difference A F))
+            (F (set-difference A Fi))
             (trash-rules
              (foldr
               (λ (x a)
                 `(,@(map (λ (γ) `(,x ε ,trash (pop on ,γ push ()))) Γ) ,@a))
-              '() A))
+              '() Fi))
             (δ (append trash-rules δ)))
        (Automaton S F A δ Σ Γ))]))
 
@@ -80,7 +80,6 @@
 (define (M-Difference M1 M2)
   (M-Intersection M1 (M-Negation M2)))
 
-;; untested
 ;; M-Concatenation : Automaton x Automaton -> Automaton
 (define (M-Concatenation M1 M2)
   (match* (M1 M2)
