@@ -199,9 +199,16 @@
 (define (CFG->CNF G)
   (if (null? G) '()
       (if (not (CFG? G))
-          (error (format "Not a valid grammars: ~s" G))
+          (error (format "Not a valid grammar: ~s" G))
           (let* ((S0 (caar G))
                  (new-S0 (gensym S0))
+                 (G (map (λ (x) (match x
+                                  [`(,S -> ,es ...)
+                                   `(,S -> . ,(map (λ (x) (if (list? x)
+                                                              (remove 'ε x)
+                                                              x))
+                                                   es))]))
+                         G))
                  (G (remove-epsilons new-S0 `((,new-S0 -> ,S0) ,@G) '())))
             (organize-rules (consolidate-again (consolidate-CNF (CNF->CNF* G '() '() #f))))))))
 
@@ -224,7 +231,6 @@
        (if (not (member* S (append ans G)))
            (consolidate-again (append ans G))
            (loop G (snoc `(,S -> . ,rules) ans)))])))
-
 
 
 (define (consolidate-CNF-help S es G)

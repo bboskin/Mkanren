@@ -377,6 +377,13 @@ cpu time: 853 real time: 857 gc time: 82 -- on avg was not as
 
 (define (eval w) (apply-word w CDRs))
 
+
+
+(define WORDS (take-words Feature 500))
+(begin (define V (map (λ (x) (displayln x)) WORDS))
+       (displayln "Done."))
+
+
 ;;;;;;;;;;;;;;;;
 ;; animation
 

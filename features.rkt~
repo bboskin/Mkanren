@@ -240,10 +240,28 @@ cpu time: 1082 real time: 1065 gc time: 86
 
 > (time (random-word Feature 5)) ;; with no Filter recursion
 cpu time: 53502 real time: 42452 gc time: 11138
+
 '(maploc maptime selectloc reducelength reduceset reducelength)
 > (time (random-word Feature 5)) ;; with Filter recursion
 cpu time: 64240 real time: 63762 gc time: 16852
 '(filterzero-minutes? filterMichigan? filterjack? selectrecipient-id reducelength)
+
+
+making Fs back into a queue. Faster in both regards! (only 1 trial LOL)
+
+> (time (random-word Feature 5)) ;; with filter recursion
+cpu time: 46669 real time: 46227 gc time: 14708
+'(filterzero-minutes? filterMichigan? filterhalf-hour? selecttime reducelength)
+
+> (time (random-word Feature 5)) ;; without filter recursion
+cpu time: 48636 real time: 42032 gc time: 9361
+'(mapdate maptime selectcaller-id reducelength reduceset reducelength)
+
+
+> (time (begin (apply-words (take-words Feature 500)) #t))
+cpu time: 853 real time: 857 gc time: 82 -- on avg was not as 
+#t
+
 
 |#
 

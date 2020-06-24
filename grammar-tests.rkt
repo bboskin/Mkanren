@@ -174,3 +174,21 @@
           (displayln "Minimization-tests passed")
           (error "Minimization tests failed")))
     (displayln "all tests skipped"))
+
+
+#|
+
+A Run on 6/18:
+
+cpu time: 10 real time: 10 gc time: 0
+DFA tests passed
+cpu time: 1 real time: 1 gc time: 0
+CFG->CNF conversion tests passed
+cpu time: 35 real time: 34 gc time: 0
+PDA tests passed
+cpu time: 695 real time: 639 gc time: 32
+Set operation PDA tests passed
+cpu time: 1395 real time: 1269 gc time: 63
+Minimization-tests passed
+
+|#

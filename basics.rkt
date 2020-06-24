@@ -1,6 +1,7 @@
 #lang racket
 
 (provide Automaton
+         Automaton?
          Automaton-start-state
          Automaton-final-states
          Automaton-all-states
@@ -26,12 +27,18 @@
          snoc
          member-of
          replace*
+         remove*
          member*
          powerset
+         cart-prod*
 
          ;; variable name management
          symbol-append
-         rename-xs)
+         rename-xs
+
+         ;; used for MK compilation
+         add-stack-ignore
+         add-stack-ignores)
 
 ;; Here are some types that we will refer to and intend what we hope are
 ;; intuitive definitions. 
@@ -113,6 +120,13 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
            (replace* old new (cdr x)))]
     [else x]))
 
+;; remove* : Any -> List -> List
+(define ((remove* x) ls)
+  (cond
+    [(not (cons? ls)) ls]
+    [else (let ((ls (remove x ls)))
+            (map (remove* x) ls))]))
+
 ;; member* : Any x List -> Bool
 (define (member* x l)
   (or (equal? x l)
@@ -163,12 +177,30 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 ;; stack-empty? : Stack -> Bool
 (define stack-empty? (λ (x) (equal? x empty-stack)))
 
-
 ;; all-empty? : (List Stack) -> Bool
 (define all-empty? (λ (ks) (andmap stack-empty? ks)))
 
 ;; empty-stacks : Nat -> (List Stack)
 (define (empty-stacks k) (build-list k (λ (_) empty-stack)))
+
+;; add-stack-ignore : Symbol x Nat -> Transition -> Transition
+(define ((add-stack-ignore mode k) t)
+  (match mode
+    ['right
+     (let ((v (build-list k (λ (_) 'preserve-stack))))
+       (append t v))]
+    ['left
+     (let ((v (build-list k (λ (_) 'preserve-stack))))
+       (match t
+         [`(,S1 ,c ,S2 . ,s)
+          `(,S1 ,c ,S2 ,@v . ,s)]))]
+    [else (error 'add-stack-ignore "Invalid mode : ~s" mode)]))
+
+;; add-stack-ignores :
+;; Symbol x Transition-Function x Nat -> Transition-Function
+(define (add-stack-ignores mode δ k)
+  (map (add-stack-ignore mode k) δ))
+
 
 ;; terminal : Any -> Bool
 ;; symbols allowed to part of Σ
@@ -213,10 +245,8 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 ;;  add-conditions : (List (List Symbol)) x Symbol x (List Stack-Instruction)
 ;;  x HashMap{(List Symbol) -> (List `(,Symbol . ,(List Stack-Instruction)))}
 ;;  -> HashMap{(List Symbol) -> (List `(,Symbol . ,(List Stack-Instruction)))}
-;; HAS SIDE EFFECT OF MODIFYING GIVEN HASHMAP not sure if
-;; it matters philosophically since that's
-;; all it returns anyway but
-
+;; HAS SIDE EFFECT OF MODIFYING GIVEN HASHMAP not sure if it matters
+;; philosophically since that's all it returns anyway but
 (define (add-conditions PΓ S instrs h)
   (let ((conds (map make-condition instrs)))
     (let ((relevant (filter (subsumed-by conds) (if (null? PΓ) '(()) PΓ))))
@@ -231,7 +261,7 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 
 ;; δ->hash : (list Transition) -> (List (List Symbol))
 (define (δ->hash δ Γ)
-  (let ((PΓ (all-combinations (map (λ (x) (cons #f x)) Γ))))
+  (let ((PΓ (cart-prod* (map (λ (x) (cons #f x)) Γ))))
     (foldr
      (λ (x a)
        (match x
@@ -272,7 +302,6 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 ;; apply-transitions :
 ;; Updates x Symbol x TMap x Symbol x (List Stack) x Acc x
 ;; Letter -> (List State)
-
 (define (apply-transitions U δ s ks acc i)
   (foldr
    (λ (e a)
@@ -303,13 +332,14 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 (define (visited? V) (λ (x) (hash-has-key? V x)))
 
 
-;; all-combinations : (List (List Symbol)) -> (List (List Symbol))
-(define (all-combinations ls)
+;; cart-prod* :
+;; (List (List Symbol)) -> (List (List Symbol))
+(define (cart-prod* ls)
   (cond
     [(null? ls) '()]
     [(null? (cdr ls)) (map list (car ls))]
     [else
-     (let ((V (all-combinations (cdr ls))))
+     (let ((V (cart-prod* (cdr ls))))
        (foldr
         (λ (e a)
           (append (map (λ (x) (cons e x)) V) a))
@@ -347,7 +377,7 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 
 #|
 Run macro:
-
+(same arguments for run/fast and run/bfs)
 
 ;; types of loop variables
 Q : Frontier, (List State)

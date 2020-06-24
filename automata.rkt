@@ -7,10 +7,9 @@
          
          M-Union
          M-Intersection
-         ;M-Negation
-         ;M-Difference
          M-Concatenation
-         
+         M*
+
          minimize-PDA)
 
 ;; M-Union : Automaton x Automaton -> Automaton
@@ -55,6 +54,22 @@
             (δ (project-to-compound-states S A1 A2 δ Σ))
             (A (append (map car δ) (map caddr δ)))
             (F (filter (λ (x) (and (memv (car x) F1) (memv (cadr x) F2))) A)))
+       (minimize-PDA (give-names (Automaton S F A δ Σ Γ))))]))
+
+;; untested
+;; M* : Automaton -> Automaton
+;; helpers defined at the end of the file
+(define (M* M)
+  (match M
+    [(Automaton S F A δ Σ Γ)
+     (let* ((F (set-cons S F))
+            (δ (append
+                (map (λ (f)
+                       `(,f ε ,F . ,(build-list
+                                     (length Γ)
+                                     (λ (_) `(pop on #f push (#f)))))) F)
+                
+                δ)))
        (minimize-PDA (give-names (Automaton S F A δ Σ Γ))))]))
 
 ;; untested
@@ -113,20 +128,36 @@
 ;;;;;;;;;;;;;;;;;;;
 ;; helpers for intersection
 
-(define (k-preserves k) (build-list k (λ (_) 'preserve-stack)))
-(define (add-k-preserves-on-right δ k)
+;; add-k-preserves-on-right : Symbol x Transition-Function x Nat -> Transition-Function
+(define (add-k-preserves mode δ k)
   (map
    (λ (x)
      (match x
        [`(,S1 ,a ,S2 . ,rules)
-        `(,S1 ,a ,S2 ,@rules . ,(k-preserves k))]))
+        (match mode
+          ['right `(,S1 ,a ,S2 ,@rules . ,(build-list k (λ (_) 'preserve-stack)))]
+          ['left `(,S1 ,a ,S2 ,@(build-list k (λ (_) 'preserve-stack)) . ,rules)])]))
    δ))
-(define (add-k-preserves-on-left δ k)
-  (map
+
+;; add-k-preserves-on-right : Transition-Function x Nat -> Transition-Function
+(define (add-k-preserves-on-right δ k)
+  (add-k-preserves 'right δ k)
+  #;(map
    (λ (x)
      (match x
        [`(,S1 ,a ,S2 . ,rules)
-        `(,S1 ,a ,S2 ,@(k-preserves k) . ,rules)]))
+        `(,S1 ,a ,S2 ,@rules . ,(build-list k (λ (_) 'preserve-stack)))]))
+   δ))
+
+
+;; add-k-preserves-on-left : Transition-Function x Nat -> Transition-Function
+(define (add-k-preserves-on-left δ k)
+  (add-k-preserves 'left δ k)
+  #;(map
+   (λ (x)
+     (match x
+       [`(,S1 ,a ,S2 . ,rules)
+        `(,S1 ,a ,S2 ,@(build-list k (λ (_) 'preserve-stack)) . ,rules)]))
    δ))
 
 
@@ -256,7 +287,6 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 
 ;; apply-circumstance :
 ;;  Transition-Function -> `(,Symbol ,(Maybe Symbol) x (List Group) -> (List Group)
-
 (define ((apply-circumstance δ) P groups)
   (let* ((F (circ-group (car P) (cdr P) δ groups)))
     (append-map (λ (g) (update-group g (map F g))) groups)))
@@ -275,7 +305,7 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
   (match M
     [(Automaton S F A δ Σ Γ)
      (let* ((groups (remove '() (state-groups δ A F Σ Γ)))
-            (A (map car groups))
+            (A (map car (filter cons? groups)))
             (S (rep S groups))
             (F (set-intersection A F))
             (δ (map (update-states groups) δ)))
@@ -321,27 +351,6 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
 ;; Helpers for Set-Intersection
 
 
-(define ((add-stack-ignore mode k) t)
-  (match mode
-    ['right (let ((v (build-list k (λ (_) 'preserve-stack))))
-              (append t v))]
-    ['left (let ((v (build-list k (λ (_) 'preserve-stack))))
-             (match t
-               [`(,S1 ,c ,S2 . ,s)
-                `(,S1 ,c ,S2 ,@v . ,s)]))]))
-
-(define (add-stack-ignores mode δ k)
-  (map (add-stack-ignore mode k) δ)
-  #;
-  (match mode
-    ['right (let ((v (build-list k (λ (_) 'preserve-stack))))
-              (map (λ (x) (append x v)) δ))]
-    ['left (let ((v (build-list k (λ (_) 'preserve-stack))))
-             (map (λ (x)
-                    (match x
-                      [`(,S1 ,c ,S2 . ,s)
-                       `(,S1 ,c ,S2 ,@v . ,s)]))
-                  δ))]))
 
 ;; renaming an automaton with compound (list) state names
 ;; to symbol state names
@@ -370,29 +379,24 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
                     δ)))
        (Automaton S F A δ Σ Γ))]))
 
-
-;; given all of the transitions reaching  out of the compound state S,
-;; consolidate transitions based on the letter/stack condition,
-;; and have them point from the compound state
-
-
-
+;; merge-stack-rules : (List Stack-Operation) x (List Stack-Operation) -> (List Stack-Operation)
+;; assumes that the two stacks can me merged without alteration
 (define (merge-stack-rules ra rb)
   (map
    (λ (r1 r2)
      (match* (r1 r2)
        [('preserve-stack r) r]
        [(r 'preserve-stack) r]
-       [(_ _) (error "Stacks not completely Independent")]))
+       [(_ _) (error 'merge-stack-rules "Stacks not completely Independent")]))
    ra rb))
 
+;; merge-transition : Transition -> Transition -> Transition
 (define ((merge-transition t1) t2)
   (match* (t1 t2)
-    [(`(,S1a ,aa ,S2a . ,ra)
-      `(,S1b ,_ ,S2b . ,rb))
+    [(`(,S1a ,aa ,S2a . ,ra) `(,S1b ,_ ,S2b . ,rb))
      `((,S1a ,S1b) ,aa (,S2a ,S2b) . ,(merge-stack-rules ra rb))]))
 
-
+;; find-partner-transitions : Transition-Function x Transition-Function -> Transition-Function
 (define (find-partner-transitions t1 t2)
   (match t1
     ['() '()]
@@ -402,12 +406,16 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
         (map (merge-transition (car t1)) yes)
         (find-partner-transitions d t2)))]))
 
+;; add-state : -> Nat x Transition -> Transition
 (define ((add-state p S) t)
   (match t
     [`(,S1 ,a ,S2 . ,rs)
      (match p
        [1 `((,S ,S1) ,a (,S ,S2) . ,rs)]
-       [2 `((,S1 ,S) ,a (,S2 ,S) . ,rs)])]))
+       [2 `((,S1 ,S) ,a (,S2 ,S) . ,rs)]
+       [else
+        (error 'add-state
+               (format "first argument not a 1 nor 2" p))])]))
 
 ;; group-transitions : Transition-Function x Transition-Function ->
 ;; Compound-Transition-Function
@@ -454,21 +462,3 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
                         (V (cons `(,S1 ,S2) V))
                         (Q (append Q (map caddr ts))))
                     (loop Q V δ))))]))))
-
-(define Start '(S145408 Start146913))
-(define A1 '(S145408 S145404 F145405 S145406 F145407))
-(define A2 '(S145451 S145451F S145449b S145449Fb S145426b S145426Fb))
-(define δ '((S145408 ε S145404 preserve-stack)
-     (S145408 ε S145406 preserve-stack)
-     (S145404 a F145405 preserve-stack)
-     (S145406 b F145407 preserve-stack)
-     (Start146913 ε S145451 preserve-stack)
-     (Start146913 ε S145449b preserve-stack)
-     (S145451 b S145451F preserve-stack)
-     (S145451 a S145451F preserve-stack)
-     (S145426b a S145426Fb preserve-stack)
-     (S145449b ε S145426b (pop on #t push (γ145568)))
-     (S145426Fb ε S145449b (pop on γ145568 push (γ145568)))
-     (S145449Fb ε S145449Fb (pop on γ145568 push ()))
-     (S145449b a S145449Fb preserve-stack)))
-(define Σ '(a b))
