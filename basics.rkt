@@ -185,16 +185,17 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 
 ;; add-stack-ignore : Symbol x Nat -> Transition -> Transition
 (define ((add-stack-ignore mode k) t)
-  (match mode
-    ['right
-     (let ((v (build-list k (λ (_) 'preserve-stack))))
-       (append t v))]
-    ['left
-     (let ((v (build-list k (λ (_) 'preserve-stack))))
-       (match t
+   (match t
          [`(,S1 ,c ,S2 . ,s)
-          `(,S1 ,c ,S2 ,@v . ,s)]))]
-    [else (error 'add-stack-ignore "Invalid mode : ~s" mode)]))
+          (let ((k (- k (length s))))
+            (match mode
+              ['right
+               (let ((v (build-list k (λ (_) 'preserve-stack))))
+                 `(,S1 ,c ,S2 ,@s . ,v))]
+              ['left
+               (let ((v (build-list k (λ (_) 'preserve-stack))))
+                 `(,S1 ,c ,S2 ,@v . ,s))]
+              [else (error 'add-stack-ignore "Invalid mode : ~s" mode)]))]))
 
 ;; add-stack-ignores :
 ;; Symbol x Transition-Function x Nat -> Transition-Function
@@ -400,6 +401,7 @@ f : (List Acc) x Answer -> Answer
 disp? : Boolean
 
 |#
+
 (define-syntax run/bfs
   (syntax-rules ()
     ((_ M I stop? finished? include? U b f א)

@@ -149,6 +149,33 @@
                 (find-words 2-stack/PDA 3))))
 
 
+(define (CFG->PDA-tests)
+  (and
+   (set-equal?? (find-words A*/DFA 5) (find-words A*/Direct-PDA 5))
+   (set-equal?? (find-words A+/DFA 5) (find-words A+/Direct-PDA 5))
+   (set-equal?? (find-words AUB/DFA 5) (find-words AUB/Direct-PDA 5))
+   (set-equal?? (find-words AUB*/DFA 5) (find-words AUB*/Direct-PDA 5))
+   (set-equal?? (find-words AUB+/DFA 5) (find-words AUB+/Direct-PDA 5))
+   (set-equal?? (find-words AUB•c+*/DFA 5) (find-words AUB•c+*/Direct-PDA 5))
+   (set-equal?? (find-words AnBn/PDA 5) (find-words AnBn/Direct-PDA 5))   
+
+   (set-equal?? (find-words AnBn2/PDA 5) (find-words AnBn2/Direct-PDA 5))
+   (set-equal?? (find-words E 5) (find-words E/Direct-PDA 5))
+   
+   (set-equal?? (find-words A*BnCn 5) (find-words A*BnCn/Direct-PDA 5))
+   (set-equal?? (find-words A+BnCn 5) (find-words A+BnCn/Direct-PDA 5))
+   (set-equal?? (find-words AnBnC* 5) (find-words AnBnC*/Direct-PDA 5))
+
+   #;
+   (set-equal?? (find-words Bool/PDA 3) (find-words Bool/Direct-PDA 3))
+   #;
+   (set-equal?? (find-words AnBnCn2 5) (find-words AnBnCn2/Direct-PDA 5))))
+
+#;
+(if (time (CFG->PDA-tests))
+          (displayln "CFG->PDA passed")
+          (error "CFG->PDA failed"))
+
 
 (if test?
     (begin
@@ -172,7 +199,11 @@
       
       (if (time (Min-tests))
           (displayln "Minimization-tests passed")
-          (error "Minimization tests failed")))
+          (error "Minimization tests failed"))
+
+      (if (time (CFG->PDA-tests))
+          (displayln "CFG->PDA passed")
+          (error "CFG->PDA failed")))
     (displayln "all tests skipped"))
 
 

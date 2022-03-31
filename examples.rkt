@@ -2,7 +2,8 @@
 
 (require "grammars.rkt"
          "G-to-M.rkt"
-         "automata.rkt")
+         "automata.rkt"
+         "queries.rkt")
 
 (provide (all-defined-out))
 
@@ -70,6 +71,8 @@
 (define Bool/CNF (CFG->CNF Bool))
 (define AnBn2/CNF (CFG->CNF AnBn2))
 
+
+
 ;;;; some PDAs
 (define A*/PDA (CNF->PDA A*/CNF))
 (define A+/PDA (CNF->PDA A+/CNF))
@@ -125,8 +128,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; examples with set intersection
 
+
 (define A/DFA (M-Intersection A*/DFA AUB/DFA))
 (define A+/DFA2 (M-Intersection A*/DFA AUB+/DFA))
+
 (define A/PDA (M-Intersection A*/PDA AUB/PDA))
 (define A+/PDA2 (M-Intersection A*/PDA AUB+/PDA))
 
@@ -158,5 +163,56 @@
       (AnBn -> ε ('a AnBn 'b))))))
 
 (define AnBnCn2 (M-Intersection A+BnCn AnBnC*))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PDAs made directly from CFGs, without
+;; being converted into CNF first.
+
+(define A*/Direct-PDA (CFG->PDA (RE->CFG A*)))
+(define A+/Direct-PDA (CFG->PDA (RE->CFG A+)))
+(define AUB/Direct-PDA (CFG->PDA (RE->CFG AUB)))
+(define AUB*/Direct-PDA (CFG->PDA (RE->CFG AUB*)))
+(define AUB+/Direct-PDA (CFG->PDA (RE->CFG AUB+)))
+(define AUB•c+*/Direct-PDA (CFG->PDA (RE->CFG AUB•c+*)))
+
+(define AnBn/Direct-PDA
+  (CFG->PDA
+   '((S -> ε (A S B))
+     (A -> 'a)
+     (B -> 'b))))
+
+(define AnBn2/Direct-PDA
+  (CFG->PDA '((S -> ε ('a S 'b)))))
+
+(define Bool/Direct-PDA
+  (CFG->PDA
+   '((S -> 'T 'F 'p 'q
+        ('not S)
+        ('andbegin S* 'andend)
+        ('orbegin S* 'orend))
+     (S* -> ε (S S*)))))
+
+(define E/Direct-PDA (CFG->PDA '((S -> ε))))
+
+(define A*BnCn/Direct-PDA
+  (CFG->PDA
+   '((S -> (A* BnCn))
+      (A* -> ε ('a A*))
+      (BnCn -> ε ('b BnCn 'c)))))
+
+(define A+BnCn/Direct-PDA
+  (CFG->PDA
+   '((S -> (A* BnCn))
+      (A* -> 'a ('a A*))
+      (BnCn -> ε ('b BnCn 'c)))))
+
+(define AnBnC*/Direct-PDA
+  (CFG->PDA
+   '((S -> (AnBn C*))
+     (C* -> ε ('c C*))
+     (AnBn -> ε ('a AnBn 'b)))))
+
+#;
+(define AnBnCn2/Direct-PDA (M-Intersection A+BnCn/Direct-PDA AnBnC*/Direct-PDA))
 
 

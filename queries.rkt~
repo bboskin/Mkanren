@@ -8,7 +8,7 @@
   (syntax-rules ()
     [(_ M w) (accept? M w #f)]
     [(_ M w disp?)
-     (run M
+     (run/fast M
           `(,w)
           (λ (_) #f)
           (λ (e) e)
@@ -23,7 +23,7 @@
   (syntax-rules ()
     [(_ M k) (find-words M k #f)]
     [(_ M k disp?)
-     (run
+     (run/bfs
       M
       '(())
       (λ (a) (> (length (car a)) k))
@@ -39,7 +39,7 @@
   (syntax-rules ()
     [(_ M k) (random-word M k #f)]
     [(_ M k disp?)
-     (run
+     (run/fast
       M
       '(())
       (λ (a) #f)
@@ -56,7 +56,7 @@
   (syntax-rules ()
     [(_ M k) (take-words M k #f)]
     [(_ M k disp?)
-     (run
+     (run/fast
       M
       '(())
       (λ (a) #f)

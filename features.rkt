@@ -4,8 +4,11 @@
   "basics.rkt"
   "queries.rkt"
   "G-to-M.rkt"
-  "grammars.rkt")
+  "grammars.rkt"
+  csv-writing)
 
+(provide (all-defined-out)
+         Label?)
 
 #|
 Relevant datatypes as we progress through our function.
@@ -43,10 +46,26 @@ Eid: symbol describing a field of CDR
     (voicemail? ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x)))
                               (cdr (assv 'recipient-id (cdr x))))))
     (half-hour? ,(λ (x) (>= (cdr (assv 'dur (cdr x))) 30)))
-    (jack? ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Jack)))
-    (ben? ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Ben)))
     (Michigan? ,(λ (x) (memv (cdr (assv 'loc (cdr x)))
-                            `(Ann-Arbor Detroit DairyTown KerryTown))) )))
+                            `(Ann-Arbor Detroit DairyTown KerryTown))) )
+
+    
+    (Jack ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Jack)))
+    (Ben ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Ben)))
+    (Brian ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Brian)))
+    (Aaron ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Aaron)))
+    (Ellington ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Ellington)))
+    (Matt ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Matt)))
+    (Cole ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Cole)))
+    (Shane ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Shane)))
+    (Tessa ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Tessa)))
+    (Tara ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Tara)))
+    (Trudi ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Trudi)))
+    (Doly ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Doly)))
+    (Karen ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Karen)))
+    (Sonya ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'Sonya)))
+    (CBreeze ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'CBreeze)))
+    (JJ ,(λ (x) (eqv? (cdr (assv 'caller-id (cdr x))) 'JJ)))))
 
 (define REDUCE-FNS
   `((+ ,(λ (x) (foldr + 0 x)) Nats Nat)
@@ -79,7 +98,7 @@ Eid: symbol describing a field of CDR
 (define CALLERS
   '(Ben Jack Brian Aaron
         Ellington Matt Cole Shane
-        Tessa Terra
+        Tessa Tara
         Trudi Doly Karen Sonya
         CBreeze JJ))
 
@@ -111,6 +130,9 @@ Eid: symbol describing a field of CDR
 
 (define FIELDS (map car (cdr (random-CDR #f))))
 (define NATFIELDS '(dur))
+(define FILTERIDs
+  (map (λ (x) (symbol-append 'filter x)) CALLERS))
+
 
 (define field? (λ (x) (memv x FIELDS)))
 (define (random-CDRs k)
@@ -124,6 +146,7 @@ Eid: symbol describing a field of CDR
     (and (cons? x)
          (number? (car x))
          (number? (cdr x)))))
+
 (define Value?
   (λ (x)
     (and (not (Label? x))
@@ -151,9 +174,10 @@ Eid: symbol describing a field of CDR
   (CNF->PDA
    (CFG->CNF
     `((Feature ->
-               (Filter* GNats ReduceNats->Nat)
-               (Filter* GSet ReduceSet->Nat))
-      (Filter* -> ε (Filter Filter*))
+               (FilterID #;Filter* GNats ReduceNats->Nat)
+               (FilterID #;Filter* GSet ReduceSet->Nat))
+      (FilterID -> . ,(map (λ (x) `',x) (list 'filterBen)))
+      #;(Filter* -> ε (Filter Filter*))
       (GNats -> SelectNats
              (Map GNats ReduceNats->Nat)
              (Map GSet ReduceSet->Nat))
@@ -163,7 +187,7 @@ Eid: symbol describing a field of CDR
       (SelectNats -> . ,(map (λ (x) `',(symbol-append 'select x)) NATFIELDS))
       (Select -> . ,(map (λ (x) `',(symbol-append 'select x)) FIELDS))
       (Map -> . ,(map (λ (x) `',(symbol-append 'map x)) FIELDS))
-      (Filter -> . ,(map (λ (x) `',(symbol-append 'filter x)) FILTER-OPS))
+      #;(Filter -> . ,(map (λ (x) `',(symbol-append 'filter x)) FILTER-OPS))
       (ReduceNats->Nat -> . ,(map (λ (x) `',(symbol-append 'reduce x)) REDUCE-NATS->NAT-OPS))
       (ReduceSet->Nat -> . ,(map (λ (x) `',(symbol-append 'reduce x)) REDUCE-SET->NAT-OPS))
       (ReduceSet->Set -> . ,(map (λ (x) `',(symbol-append 'reduce x)) REDUCE-SET->SET-OPS))))))
@@ -313,7 +337,7 @@ cpu time: 853 real time: 857 gc time: 82 -- on avg was not as
 
 ;; Reduce : ValTree -> ValTree
 (define ((Reduce f) o)
-  (match o
+  (match o 
     [(? Value? v) (if (not (list? v)) (f `(,v)) (f v))]
     [`(,(? Value? v) ...) (f v)]
     [`(,(? Label? e) ,(? Value? v) ...) (f v)]
@@ -377,10 +401,183 @@ cpu time: 853 real time: 857 gc time: 82 -- on avg was not as
 
 (define (eval w) (apply-word w CDRs))
 
+;; (take-words Feature 100)
 
 
-(define WORDS (take-words Feature 500))
-(begin (define V (map (λ (x) (displayln x)) WORDS))
+(define BEN-WORDS
+  '((filterBen maptime selectdur reducelength reduce+)
+    (filterBen mapdate selectloc reducelength reducemean)
+    (filterBen mapdate selectloc reducelength reduce*)
+    (filterBen mapdate selectloc reducelength reduce+)
+    (filterBen mapdate selecttime reducelength reducemean)
+    (filterBen mapdate selecttime reducelength reduce*)
+    (filterBen mapdate selecttime reducelength reduce+)
+    (filterBen mapdate selectdate reducelength reducemean)
+    (filterBen mapdate selectdate reducelength reduce*)
+    (filterBen mapdate selectdate reducelength reduce+)
+    (filterBen mapdate selectrecipient-id reducelength reducemean)
+    (filterBen mapdate selectrecipient-id reducelength reduce*)
+    (filterBen mapdate selectrecipient-id reducelength reduce+)
+    (filterBen mapdate selectcaller-id reducelength reducemean)
+    (filterBen mapdate selectcaller-id reducelength reduce*)
+    (filterBen mapdate selectcaller-id reducelength reduce+)
+    (filterBen mapdate selectdur reducelength reducemean)
+    (filterBen mapdate selectdur reducelength reduce*)
+    (filterBen mapdate selectdur reducelength reduce+)
+    (filterBen maprecipient-id selectloc reducelength reducemean)
+  (filterBen maprecipient-id selectloc reducelength reduce*)
+  (filterBen maprecipient-id selectloc reducelength reduce+)
+  (filterBen maprecipient-id selecttime reducelength reducemean)
+  (filterBen maprecipient-id selecttime reducelength reduce*)
+  (filterBen maprecipient-id selecttime reducelength reduce+)
+  (filterBen maprecipient-id selectdate reducelength reducemean)
+  (filterBen maprecipient-id selectdate reducelength reduce*)
+  (filterBen maprecipient-id selectdate reducelength reduce+)
+  (filterBen maprecipient-id selectrecipient-id reducelength reducemean)
+  (filterBen maprecipient-id selectrecipient-id reducelength reduce*)
+  (filterBen maprecipient-id selectrecipient-id reducelength reduce+)
+  (filterBen maprecipient-id selectcaller-id reducelength reducemean)
+  (filterBen maprecipient-id selectcaller-id reducelength reduce*)
+  (filterBen maprecipient-id selectcaller-id reducelength reduce+)
+  (filterBen maprecipient-id selectdur reducelength reducemean)
+  (filterBen maprecipient-id selectdur reducelength reduce*)
+  (filterBen maprecipient-id selectdur reducelength reduce+)
+  (filterBen mapcaller-id selectloc reducelength reducemean)
+  (filterBen mapcaller-id selectloc reducelength reduce*)
+  (filterBen mapcaller-id selectloc reducelength reduce+)
+  (filterBen mapcaller-id selecttime reducelength reducemean)
+  (filterBen mapcaller-id selecttime reducelength reduce*)
+  (filterBen mapcaller-id selecttime reducelength reduce+)
+  (filterBen mapcaller-id selectdate reducelength reducemean)
+  (filterBen mapcaller-id selectdate reducelength reduce*)
+  (filterBen mapcaller-id selectdate reducelength reduce+)
+  (filterBen mapcaller-id selectrecipient-id reducelength reducemean)
+  (filterBen mapcaller-id selectrecipient-id reducelength reduce*)
+  (filterBen mapcaller-id selectrecipient-id reducelength reduce+)
+  (filterBen mapcaller-id selectcaller-id reducelength reducemean)
+  (filterBen mapcaller-id selectcaller-id reducelength reduce*)
+  (filterBen mapcaller-id selectcaller-id reducelength reduce+)
+  (filterBen mapcaller-id selectdur reducelength reducemean)
+  (filterBen mapcaller-id selectdur reducelength reduce*)
+  (filterBen mapcaller-id selectdur reducelength reduce+)
+  (filterBen maploc selectloc reduceset reducelength)
+  (filterBen maploc selecttime reduceset reducelength)
+  (filterBen maploc selectdate reduceset reducelength)
+  (filterBen maploc selectrecipient-id reduceset reducelength)
+  (filterBen maploc selectcaller-id reduceset reducelength)
+  (filterBen mapdur selectloc reduceset reducelength)
+  (filterBen mapdur selecttime reduceset reducelength)
+  (filterBen mapdur selectdate reduceset reducelength)
+  (filterBen mapdur selectrecipient-id reduceset reducelength)
+  (filterBen mapdur selectcaller-id reduceset reducelength)
+  (filterBen maptime selectloc reduceset reducelength)
+  (filterBen maptime selecttime reduceset reducelength)
+  (filterBen maptime selectdate reduceset reducelength)
+  (filterBen maptime selectrecipient-id reduceset reducelength)
+  (filterBen maptime selectcaller-id reduceset reducelength)
+  (filterBen mapdate selectloc reduceset reducelength)
+  (filterBen mapdate selecttime reduceset reducelength)
+  (filterBen mapdate selectdate reduceset reducelength)
+  (filterBen mapdate selectrecipient-id reduceset reducelength)
+  (filterBen mapdate selectcaller-id reduceset reducelength)
+  (filterBen maprecipient-id selectloc reduceset reducelength)
+  (filterBen maprecipient-id selecttime reduceset reducelength)
+  (filterBen maprecipient-id selectdate reduceset reducelength)
+  (filterBen maprecipient-id selectrecipient-id reduceset reducelength)
+  (filterBen maprecipient-id selectcaller-id reduceset reducelength)
+  (filterBen mapcaller-id selectloc reduceset reducelength)
+  (filterBen mapcaller-id selecttime reduceset reducelength)
+  (filterBen mapcaller-id selectdate reduceset reducelength)
+  (filterBen mapcaller-id selectrecipient-id reduceset reducelength)
+  (filterBen mapcaller-id selectcaller-id reduceset reducelength)
+  (filterBen maploc selectdur reduceset reducelength)
+  (filterBen mapdur selectdur reduceset reducelength)
+  (filterBen maptime selectdur reduceset reducelength)
+  (filterBen mapdate selectdur reduceset reducelength)
+  (filterBen maprecipient-id selectdur reduceset reducelength)
+  (filterBen mapcaller-id selectdur reduceset reducelength)
+  (filterBen selectdur reducemean)
+  (filterBen selectdur reduce*)
+  (filterBen selectdur reduce+)
+  (filterBen selectloc reducelength)
+  (filterBen selecttime reducelength)
+  (filterBen selectdate reducelength)
+  (filterBen selectrecipient-id reducelength)
+  (filterBen selectcaller-id reducelength)
+  (filterBen selectdur reducelength)))
+
+(define JACK-WORDS (map (λ (x) `(filterJack . ,(cdr x))) BEN-WORDS))
+(define AARON-WORDS (map (λ (x) `(filterAaron . ,(cdr x))) BEN-WORDS))
+(define BRIAN-WORDS (map (λ (x) `(filterBrian . ,(cdr x))) BEN-WORDS))
+(define ELLINGTON-WORDS (map (λ (x) `(filterEllington . ,(cdr x))) BEN-WORDS))
+(define MATT-WORDS (map (λ (x) `(filterMatt . ,(cdr x))) BEN-WORDS))
+(define COLE-WORDS (map (λ (x) `(filterCole . ,(cdr x))) BEN-WORDS))
+(define SHANE-WORDS (map (λ (x) `(filterShane . ,(cdr x))) BEN-WORDS))
+(define TESSA-WORDS (map (λ (x) `(filterTessa . ,(cdr x))) BEN-WORDS))
+(define TARA-WORDS (map (λ (x) `(filterTara . ,(cdr x))) BEN-WORDS))
+(define TRUDI-WORDS (map (λ (x) `(filterTrudi . ,(cdr x))) BEN-WORDS))
+(define DOLY-WORDS (map (λ (x) `(filterDoly . ,(cdr x))) BEN-WORDS))
+(define KAREN-WORDS (map (λ (x) `(filterKaren . ,(cdr x))) BEN-WORDS))
+(define SONYA-WORDS (map (λ (x) `(filterSonya . ,(cdr x))) BEN-WORDS))
+(define CBREEZE-WORDS (map (λ (x) `(filterCBreeze . ,(cdr x))) BEN-WORDS))
+(define JJ-WORDS (map (λ (x) `(filterJJ . ,(cdr x))) BEN-WORDS))
+
+(define (to-dec x)
+  (cond
+    [(null? x) '()]
+    [(symbol? x) x]
+    [(number? x) (/ x 1.0)]
+    [(cons? x)
+     (cons (to-dec (car x))
+           (to-dec (cdr x)))]
+    [else (error "unknown thing ~s" x)]))
+
+(define WORDS
+  (map to-dec
+       (cons (map (λ (_) (gensym 'WORD)) BEN-WORDS)
+             (map cons
+                  CALLERS
+                  (map apply-words
+                       (list
+                        BEN-WORDS
+                        JACK-WORDS
+                        AARON-WORDS
+                        BRIAN-WORDS
+                        MATT-WORDS
+                        COLE-WORDS
+                        ELLINGTON-WORDS
+                        SHANE-WORDS
+                        TESSA-WORDS
+                        TARA-WORDS
+                        TRUDI-WORDS
+                        DOLY-WORDS
+                        KAREN-WORDS
+                        SONYA-WORDS
+                        CBREEZE-WORDS
+
+                        JJ-WORDS))))))
+(define (disp-row x)
+  (match x
+    [`(,e ...)
+    (displayln `(',e ...))]))
+(foldl
+ (λ (x a)
+   (begin (disp-row x)
+          a))
+ 'yo
+ WORDS)
+
+
+#;
+(define CALLERS
+  '(Ben Jack Brian Aaron
+        Ellington Matt Cole Shane
+        Tessa Tara
+        Trudi Doly Karen Sonya
+        CBreeze JJ))
+
+
+#;(begin (define V (map (λ (x) (displayln x)) WORDS))
        (displayln "Done."))
 
 
@@ -456,9 +653,6 @@ cpu time: 853 real time: 857 gc time: 82 -- on avg was not as
                  (rectangle 50 50 "solid" "white")
                  (draw-tree (car x)))
                 (empty-scene SCREEN-SIZE SCREEN-SIZE)))])))
-
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; Old grammars kept for posterity

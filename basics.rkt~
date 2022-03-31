@@ -1,6 +1,7 @@
 #lang racket
 
 (provide Automaton
+         Automaton?
          Automaton-start-state
          Automaton-final-states
          Automaton-all-states
@@ -9,8 +10,10 @@
          Automaton-stack-alphabets
         
          terminal?
-         run
 
+         run/fast
+         run/bfs
+         
          ;; basic basics
          id
          
@@ -24,21 +27,21 @@
          snoc
          member-of
          replace*
+         remove*
          member*
          powerset
+         cart-prod*
 
          ;; variable name management
          symbol-append
          rename-xs
 
-
-         ;; THE REST ARE FUNCTIONS TO hide again
-         ;; stack function used in M-Intersection
-         all-empty?
-         apply-instruction)
+         ;; used for MK compilation
+         add-stack-ignore
+         add-stack-ignores)
 
 ;; Here are some types that we will refer to and intend what we hope are
-;; intuitive definitions.
+;; intuitive definitions. 
 
 #|
 Any -- anything
@@ -69,8 +72,8 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
    final-states        ;; F : (List Symbol)
    all-states          ;; Q : (List Symbol)
    transition-function ;; δ : (list Transition)
-   alphabet            ;; Σ : (List Symbol)
-   stack-alphabets]    ;; Γ : (List Stack)
+   alphabet            ;; Σ : (List Letter)
+   stack-alphabets]    ;; Γ : (List (List Symbol))
   #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -116,6 +119,13 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
      (cons (replace* old new (car x))
            (replace* old new (cdr x)))]
     [else x]))
+
+;; remove* : Any -> List -> List
+(define ((remove* x) ls)
+  (cond
+    [(not (cons? ls)) ls]
+    [else (let ((ls (remove x ls)))
+            (map (remove* x) ls))]))
 
 ;; member* : Any x List -> Bool
 (define (member* x l)
@@ -167,12 +177,30 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 ;; stack-empty? : Stack -> Bool
 (define stack-empty? (λ (x) (equal? x empty-stack)))
 
-
 ;; all-empty? : (List Stack) -> Bool
 (define all-empty? (λ (ks) (andmap stack-empty? ks)))
 
 ;; empty-stacks : Nat -> (List Stack)
 (define (empty-stacks k) (build-list k (λ (_) empty-stack)))
+
+;; add-stack-ignore : Symbol x Nat -> Transition -> Transition
+(define ((add-stack-ignore mode k) t)
+  (match mode
+    ['right
+     (let ((v (build-list k (λ (_) 'preserve-stack))))
+       (append t v))]
+    ['left
+     (let ((v (build-list k (λ (_) 'preserve-stack))))
+       (match t
+         [`(,S1 ,c ,S2 . ,s)
+          `(,S1 ,c ,S2 ,@v . ,s)]))]
+    [else (error 'add-stack-ignore "Invalid mode : ~s" mode)]))
+
+;; add-stack-ignores :
+;; Symbol x Transition-Function x Nat -> Transition-Function
+(define (add-stack-ignores mode δ k)
+  (map (add-stack-ignore mode k) δ))
+
 
 ;; terminal : Any -> Bool
 ;; symbols allowed to part of Σ
@@ -204,14 +232,21 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
     [`(pop on #t push ,vs) #t]
     [`(pop on ,γ push ,vs) γ]))
 
+;; subsumed-by : (List {#t U Symbol}) x (List {#t U Symbol}) -> Boolean
 (define ((subsumed-by c1) c2)
   (match* (c1 c2)
     [('() '()) #t]
     [(`(#t . ,d1) `(,a2 . ,d2)) ((subsumed-by d1) d2)]
+    [(`(,a1 . ,d1) `(#t . ,d2)) ((subsumed-by d1) d2)]
     [(`(,a1 . ,d1) `(,a2 . ,d2))
      (and (eqv? a1 a2) ((subsumed-by d1) d2))]
     [(_ _) #f]))
 
+;;  add-conditions : (List (List Symbol)) x Symbol x (List Stack-Instruction)
+;;  x HashMap{(List Symbol) -> (List `(,Symbol . ,(List Stack-Instruction)))}
+;;  -> HashMap{(List Symbol) -> (List `(,Symbol . ,(List Stack-Instruction)))}
+;; HAS SIDE EFFECT OF MODIFYING GIVEN HASHMAP not sure if it matters
+;; philosophically since that's all it returns anyway but
 (define (add-conditions PΓ S instrs h)
   (let ((conds (map make-condition instrs)))
     (let ((relevant (filter (subsumed-by conds) (if (null? PΓ) '(()) PΓ))))
@@ -226,7 +261,7 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 
 ;; δ->hash : (list Transition) -> (List (List Symbol))
 (define (δ->hash δ Γ)
-  (let ((PΓ (all-combinations (map (λ (x) (cons #f x)) Γ))))
+  (let ((PΓ (cart-prod* (map (λ (x) (cons #f x)) Γ))))
     (foldr
      (λ (x a)
        (match x
@@ -252,7 +287,6 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
     [`(pop on ,γ push ,vs) (append vs (cdr k))]))
 
 
-
 ;; get-δ :
 ;; TMap x Symbol x Letter x (List Stack)
 ;;  -> (List `(,Symbol . ,(List Stack-Instruction)))
@@ -268,7 +302,6 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 ;; apply-transitions :
 ;; Updates x Symbol x TMap x Symbol x (List Stack) x Acc x
 ;; Letter -> (List State)
-
 (define (apply-transitions U δ s ks acc i)
   (foldr
    (λ (e a)
@@ -299,13 +332,14 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
 (define (visited? V) (λ (x) (hash-has-key? V x)))
 
 
-;; all-combinations : (List (List Symbol)) -> (List (List Symbol))
-(define (all-combinations ls)
+;; cart-prod* :
+;; (List (List Symbol)) -> (List (List Symbol))
+(define (cart-prod* ls)
   (cond
     [(null? ls) '()]
     [(null? (cdr ls)) (map list (car ls))]
     [else
-     (let ((V (all-combinations (cdr ls))))
+     (let ((V (cart-prod* (cdr ls))))
        (foldr
         (λ (e a)
           (append (map (λ (x) (cons e x)) V) a))
@@ -330,6 +364,10 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
     [`((,s ,ks ,(? stop?)) . ,Q) (values '() '() Q A)]
     [`(,(? (visited? V)) . ,Q) (values '() '() Q A)]
     [`((,s ,ks ,a) . ,Q)
+     (let ((A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
+             (Q1n (apply-symbols U δ s ks a (א Σ a)))
+             (Q2n (apply-ε δ s ks a)))
+         (values Q1n Q2n Q A))
      (begin
        (hash-set! V `(,s ,ks ,a) #t)
        (let ((A (if (and (F? s) (all-empty? ks) (include? a)) (f a A) A))
@@ -337,7 +375,57 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
              (Q2n (apply-ε δ s ks a)))
          (values Q1n Q2n Q A)))]))
 
-(define-syntax run
+#|
+Run macro:
+(same arguments for run/fast and run/bfs)
+
+;; types of loop variables
+Q : Frontier, (List State)
+V : HashMap(State -> Boolean)
+A : Answer
+;;
+
+;; types of input variables
+M : Automaton
+I : (List Acc) (Initial Value for accumulator (will be treated as a list of values))
+stop? : (List Acc) -> Boolean
+finished? : Answer -> Boolean
+include? : (List Acc) -> Boolean
+U : (List (-> Acc Acc)), how to update each accumulator
+
+b : Answer
+f : (List Acc) x Answer -> Answer
+
+א : Letter x (List Letter) -> (List Letter)
+disp? : Boolean
+
+|#
+
+(define-syntax run/bfs
+  (syntax-rules ()
+    ((_ M I stop? finished? include? U b f א)
+     (run M I stop? finished? include? U b f א #f))
+    ((_ M I stop? finished? include? U b f א disp?)
+     (match M
+       [(Automaton S F A δ Σ Γ)
+        (let* ((δ (δ->hash δ Γ))
+               (F? (final-state? F))
+               (V (make-hash))
+               (expand (step Σ F? include? stop? f א U δ)) )
+          (let loop ((Q `((,S ,(empty-stacks (length Γ)) ,I)))
+                     (A b))
+            (begin
+              (if disp? (begin (displayln Q) (displayln "")) void)
+              (cond
+                [(finished? A) A]
+                [(null? Q) A]
+                [else
+                 (let-values (((Qsym Qε Qold A) (expand Q A V)))
+                    (loop (enqueue Qold (enqueue Qsym Qε)) A))]))))]))))
+
+
+
+(define-syntax run/fast
   (syntax-rules ()
     ((_ M I stop? finished? include? U b f א)
      (run M I stop? finished? include? U b f א #f))
@@ -353,7 +441,7 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
                      (A b))
             (begin
               (if disp?
-                  (begin (displayln Qsym) (displayln "")  (displayln Qε))
+                  (begin (displayln Qsym) (displayln "") (displayln Qε))
                   void)
               (cond
                 [(finished? A) A]
@@ -363,4 +451,4 @@ Updates : (List (Symbol x Letter x Acc -> Acc))
                        (loop Qsymn (enqueue Qεn Qε) A)))]
                 [else
                  (let-values (((Qsymn Qεn Qsym A) (expand Qsym A V)))
-                    (loop (push Qsymn Qsym) (push Qεn Qε) A))]))))]))))
+                    (loop (enqueue Qsymn Qsym) (push Qεn Qε) A))]))))]))))

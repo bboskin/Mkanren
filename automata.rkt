@@ -34,8 +34,8 @@
           `(,((add-stack-ignore 'left k-stacks)`(,S0 ε ,S1))
             ,((add-stack-ignore 'left k-stacks)`(,S0 ε ,S2))
             . ,(append
-                (add-stack-ignores 'right δ1 k-needed-1)
-                (add-stack-ignores 'right δ2 k-needed-2)))
+                (add-stack-ignores 'right δ1 k-stacks #;k-needed-1)
+                (add-stack-ignores 'right δ2 k-stacks #;k-needed-2)))
         (set-union Σ1 Σ2)
         (map set-union Γ1 Γ2))))]))
 
@@ -45,12 +45,13 @@
   (match* (M1 M2)
     [((Automaton S1 F1 A1 δ1 Σ1 Γ1)
       (Automaton S2 F2 A2 δ2 Σ2 Γ2))
-     (let* ((Σ (set-intersection Σ1 Σ2))
+     (let* (#;(k (max (length Γ1) (length Γ2)))
+            (Σ (set-intersection Σ1 Σ2))
             (Γ (append Γ1 Γ2))
             (S (list S1 S2))
             (δ (append
-                (add-stack-ignores 'right δ1 (length Γ2))
-                (add-stack-ignores 'left δ2 (length Γ1))))
+                (add-stack-ignores 'right δ1 (length Γ) #;(length Γ2))
+                (add-stack-ignores 'left δ2 (length Γ) #;(length Γ1))))
             (δ (project-to-compound-states S A1 A2 δ Σ))
             (A (append (map car δ) (map caddr δ)))
             (F (filter (λ (x) (and (memv (car x) F1) (memv (cadr x) F2))) A)))
@@ -116,8 +117,8 @@
           `(,@(add-stack-ignores
                'right (map (λ (f) `(,f ε ,S2)) F1) k-stacks)
             . ,(append
-                (add-stack-ignores 'right δ1 k-needed-1)
-                (add-stack-ignores 'left δ2 k-needed-2)))
+                (add-stack-ignores 'right δ1 k-stacks #;k-needed-1)
+                (add-stack-ignores 'left δ2 k-stacks #;k-needed-2)))
         (set-union Σ1 Σ2)
         (map set-union Γ1 Γ2))))]))
 
@@ -242,8 +243,8 @@ Group -- `(,Symbol . ,(List Symbol)) the first symbol is the
          '())]
     [`(,a ,S2 . ,rs)
      (if (and (eqv? a s) (andmap stack-agrees? γs rs))
-         `(,(lookup-group S2 gs 0))
-         '())]))
+           `(,(lookup-group S2 gs 0))
+           '())]))
 
 
 ;; circ-group : Symbol x Symbol x Transition-Function x (List Group)
